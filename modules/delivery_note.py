@@ -14,12 +14,14 @@ from tkinter import ttk, messagebox
 from datetime import datetime
 import sys
 import os
+import tempfile
 import json
 import tkinter.filedialog as fd
 from datetime import datetime
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx2pdf import convert
 from common.utils import replace_placeholder_in_paragraph, save_to_json, load_from_json, parse_float_from_string
 
 # Add parent directory to path for imports
@@ -496,7 +498,7 @@ class DeliveryNoteGenerator(BaseGenerator):
     
     def export_template(self):
         """
-        Export delivery note template with required columns.
+        Export delivery note template with required columns (uses default template).
         """
         try:
             export_data = self.get_export_data()
@@ -504,16 +506,13 @@ class DeliveryNoteGenerator(BaseGenerator):
             if not export_data:
                 raise ValueError("No data to export. Please add items to the delivery note.")
 
-            # Select template file
-            filepath = fd.askopenfilename(
-                filetypes=[("Word Documents", "*.docx")],
-                title="Select Word Template"
-            )
+            # ✅ Use default template path instead of asking
+            default_template = os.path.join(os.getcwd(), "assets", "template.docx")
 
-            if not filepath:
-                return
+            if not os.path.exists(default_template):
+                raise FileNotFoundError(f"Default template not found:\n{default_template}")
 
-            doc = Document(filepath)
+            doc = Document(default_template)
 
             # Mapping of placeholders to actual values
             placeholders = {
@@ -544,21 +543,19 @@ class DeliveryNoteGenerator(BaseGenerator):
             # Populate item table
             self.populate_item_table(doc, export_data)
 
-            # Save the populated document with desired default filename
+            # ✅ Auto-generate filename
             current_date = datetime.now().strftime("%d-%m-%y")
             client_name = self.customer_entry.get().strip() or "Client"
             default_filename = f"DN0{current_date}-{client_name}.docx"
 
-            save_path = fd.asksaveasfilename(
-                defaultextension=".docx",
-                filetypes=[("Word Document", "*.docx")],
-                initialfile=default_filename
-            )
+            # ✅ Save automatically into "exports" folder (no dialog)
+            export_folder = os.path.join(os.getcwd(), "exports")
+            os.makedirs(export_folder, exist_ok=True)
+            save_path = os.path.join(export_folder, default_filename)
 
-            if save_path:
-                doc.save(save_path)
-                save_to_json(export_data)
-                messagebox.showinfo("Success", f"Delivery note exported successfully to:\n{save_path}")
+            doc.save(save_path)
+            save_to_json(export_data)
+            messagebox.showinfo("Success", f"Delivery note exported successfully:\n{save_path}")
 
         except Exception as e:
             messagebox.showerror("Export Failed", f"Failed to export delivery note:\n{str(e)}")
@@ -620,6 +617,73 @@ class DeliveryNoteGenerator(BaseGenerator):
             "Status": 80
         }
         return width_map.get(col, 100)
+    
+    def print_delivery_note_pdf(self):
+        """
+        Export delivery note as PDF and send to the system printer.
+        """
+        try:
+            # Step 2a: Export data
+            export_data = self.get_export_data()
+            if not export_data:
+                messagebox.showwarning("No Data", "No items to export.")
+                return
+
+            # Step 2b: Export as PDF (create temporary PDF file)
+            client_name = self.customer_entry.get().strip() or "Client"
+            current_date = datetime.now().strftime("%d-%m-%y")
+            pdf_filename = f"DN0{current_date}-{client_name}.pdf"
+            temp_dir = tempfile.gettempdir()
+            pdf_path = os.path.join(temp_dir, pdf_filename)
+
+            # Ask user for Word template
+            from tkinter import filedialog as fd
+            template_path = fd.askopenfilename(
+                filetypes=[("Word Documents", "*.docx")],
+                title="Select Word Template"
+            )
+            if not template_path:
+                return
+
+            # Fill template with placeholders
+            doc = Document(template_path)
+            placeholders = {
+                "Customer": self.customer_entry.get().strip(),
+                "Address": self.address_entry.get().strip(),
+                "Phone_Num": self.phone_entry.get().strip(),
+                "Fax": self.fax_entry.get().strip(),
+                "Incharge": self.incharge_entry.get().strip(),
+                "Customer_PO": self.po_ref_entry.get().strip(),
+                "Quotation": self.quotation_entry.get().strip(),
+                "Project_Name": self.project_entry.get().strip(),
+                "Contact_Num": self.contact_number_entry.get().strip(),
+                "Date": self.delivery_date.get().strip()
+            }
+            for paragraph in doc.paragraphs:
+                for key, value in placeholders.items():
+                    replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
+
+            self.populate_item_table(doc, export_data)
+
+            # Save temp Word file
+            temp_docx = os.path.join(temp_dir, "temp_delivery_note.docx")
+            doc.save(temp_docx)
+
+            # Convert Word to PDF
+            convert(temp_docx, pdf_path)
+
+            # Step 2c: Print the PDF using system default viewer
+            if os.name == "nt":  # Windows
+                os.startfile(pdf_path, "print")
+            elif sys.platform == "darwin":  # macOS
+                os.system(f"lp '{pdf_path}'")
+            else:  # Linux
+                os.system(f"lp '{pdf_path}'")
+
+            messagebox.showinfo("Success", f"Delivery note sent to printer.")
+
+        except Exception as e:
+            messagebox.showerror("Print Failed", f"Failed to print delivery note:\n{e}")
 
 
 # Test the module independently

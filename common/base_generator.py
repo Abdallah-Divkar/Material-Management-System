@@ -345,9 +345,14 @@ class BaseGenerator(tk.Toplevel, ABC):
         if hasattr(self, 'export_template'):
             ttk.Button(btn_frame, text="Export as Template", command=self.export_template).grid(row=0, column=3, padx=10)
 
+        # Add Print button if subclass has print_delivery_note_pdf
+        if hasattr(self, 'print_delivery_note_pdf'):
+            ttk.Button(btn_frame, text="Print Delivery Note", command=self.print_delivery_note_pdf).grid(row=0, column=5, padx=10)
+
         ttk.Button(btn_frame, text="Back to Home", command=self.return_home).grid(row=0, column=4, padx=10)
 
         self.btn_frame = btn_frame
+
     
     '''def create_item_management_section(self):
         """Create the item management buttons section with checkbox support"""
