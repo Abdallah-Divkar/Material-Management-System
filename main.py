@@ -17,7 +17,7 @@ class HomePage(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("MTS Material Management System")
-        self.geometry("800x600")
+        self.geometry("800x800")
         self.configure(bg="#00A651")
         
         # Center the window

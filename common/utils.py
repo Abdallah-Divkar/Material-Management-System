@@ -1,6 +1,9 @@
 """
 Utility functions for formatting and validation
 """
+import json
+import os
+import re
 
 def format_qty(qty):
     """Format quantity for display"""
@@ -73,3 +76,31 @@ def replace_placeholder_in_paragraph(paragraph, placeholder, value):
         # Set new text in first run
         if paragraph.runs:
             paragraph.runs[0].text = new_text
+
+def save_to_json(data, filename="delivery_cache.json"):
+    try:
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Error saving JSON: {e}")
+        return False
+
+def load_from_json(filename="delivery_cache.json"):
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading JSON: {e}")
+            return []
+        
+def parse_float_from_string(s):
+    """
+    Extract the first float number from a string.
+    Returns 0.0 if no valid number found.
+    """
+    match = re.search(r"[-+]?\d*\.\d+|\d+", str(s))
+    if match:
+        return float(match.group())
+    return 0.0

@@ -1,55 +1,41 @@
+# common/base_generator.py
 import os
+import requests
+from dotenv import load_dotenv
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 import pandas as pd
 from abc import ABC, abstractmethod
-#from modules.delivery_note import create_delivery_info_inline
 
 from common.excel_handler import get_products, get_product_details
 from common.utils import format_qty, format_price, format_weight
 
+load_dotenv()
+
+API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
+
 class BaseGenerator(tk.Toplevel, ABC):
-    """Base class for all generator modules"""
+    """Base class for all generator modules with improved layout structure"""
     
     def __init__(self, parent, title="Generator"):
         super().__init__(parent)
         self.parent = parent
         self.title(title)
-        self.geometry("1000x800")
+        self.geometry("1200x900")  # Increased size for better layout
         self.configure(bg="#00A651")
         
         # Common attributes
-        self.products = get_products()  # This will now try to load from cache first
+        self.products = get_products()
         self.currency_unit = tk.StringVar(value="SAR")
         self.selected_items = []
         self.combo_display_list = []
         
         # Build display list for combobox
         self.build_combo_display_list()
-
-        self.main_frame = parent
-        #self.main_frame.pack(fill="both", expand=True)
-
-        # ✅ Create scrollable canvas + frame here
-        '''self.canvas = tk.Canvas(self.main_frame)
-        self.scrollbar = ttk.Scrollbar(self.main_frame, orient="horizontal", command=self.canvas.yview)
-        self.scrollable_frame = ttk.Frame(self.canvas)
-
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
-
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
-
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")'''
         
-        # Create the UI
+        # Create the UI structure
         self.create_base_widgets()
-        #self.create_custom_widgets()  # Override in subclasses
         
         # Focus on this window
         self.focus_set()
@@ -78,12 +64,15 @@ class BaseGenerator(tk.Toplevel, ABC):
         self.main_frame = tk.Frame(self.main_canvas, bg="#00A651")
         self.main_canvas_frame = self.main_canvas.create_window((0, 0), window=self.main_frame, anchor="nw")
 
+        # Configure main frame grid
+        self.main_frame.grid_columnconfigure(0, weight=1)
+
         # Bind canvas configurations
         self.main_frame.bind("<Configure>", self.on_main_frame_configure)
         self.main_canvas.bind("<Configure>", self.on_main_canvas_configure)
         
-        # Title section
-        self.create_title_section()
+        # NOTE: Title section is now created by subclasses via create_title_section()
+        # This allows for customization while maintaining consistent base structure
         
         # Search section
         self.create_search_section()
@@ -92,7 +81,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         self.create_details_section()
         
         # Item management section
-        self.create_item_management_section()
+        #self.create_item_management_section()
         
         # Items treeview
         self.create_items_treeview()
@@ -101,46 +90,59 @@ class BaseGenerator(tk.Toplevel, ABC):
         self.create_control_buttons()
     
     def create_title_section(self, left_frame_callback=None):
-        """Header: left reserved for delivery info, right has logo + title"""
-        header_frame = tk.Frame(self.main_frame, bg="#00A651")
-        header_frame.grid(row=0, column=0, sticky="ew")  # or pack if needed
-        self.header_frame = header_frame  # store for child to use
-        header_frame.grid_columnconfigure(0, weight=1)  # left
-        header_frame.grid_columnconfigure(1, weight=1)  # right
+        """
+        Create the title section - can be overridden by subclasses.
         
-        # Left: Delivery Info
+        Args:
+            left_frame_callback: Optional callback function to create custom left content
+        """
+        header_frame = tk.Frame(self.main_frame, bg="#00A651")
+        header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(5, 0))
+        
+        # Store reference for subclasses
+        self.header_frame = header_frame
+        
+        # Configure grid weights
+        header_frame.grid_columnconfigure(0, weight=1)
+        header_frame.grid_columnconfigure(1, weight=0)
+        
+        # Left side: Custom content or empty frame
         if left_frame_callback:
-            self.delivery_info_frame = left_frame_callback(header_frame)
+            self.left_content_frame = left_frame_callback(header_frame)
         else:
-            self.delivery_info_frame = tk.Frame(header_frame, bg="#F0F0F0")
-            self.delivery_info_frame.grid(row=0, column=0, sticky="nsew")
+            self.left_content_frame = tk.Frame(header_frame, bg="#F0F0F0")
+            self.left_content_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         
         # Right side: Logo + Title
-        logo_title_frame = tk.Frame(header_frame, bg="#00A651")
-        logo_title_frame.grid(row=0, column=1, sticky="e")
+        self.create_default_logo_title_section(header_frame)
+
+    def create_default_logo_title_section(self, parent_frame):
+        """Create default logo and title section"""
+        logo_title_frame = tk.Frame(parent_frame, bg="#00A651")
+        logo_title_frame.grid(row=0, column=1, sticky="ne", padx=(10, 0))
         
+        # Logo
         try:
             logo_path = os.path.join("assets", "mts_logo.png")
             if os.path.exists(logo_path):
-                logo_image = Image.open(logo_path).resize((80, 80))
+                logo_image = Image.open(logo_path).resize((80, 80), Image.Resampling.LANCZOS)
                 self.logo_photo = ImageTk.PhotoImage(logo_image)
                 logo_label = tk.Label(logo_title_frame, image=self.logo_photo, bg="#00A651")
                 logo_label.pack(side="left", padx=(0, 10))
         except Exception as e:
             print(f"Error loading logo: {e}")
 
+        # Title
         title_text = getattr(self, 'module_title', 'Generator')
         title = tk.Label(logo_title_frame, text=title_text, bg="#00A651",
                         fg="white", font=("Arial", 28, "bold"))
         title.pack(side="left")
 
-
     def create_search_section(self):
         """Create the search/product selection section"""
         search_frame = tk.Frame(self.main_frame, bg="#00A651")
-        search_frame.grid(row=1, column=0, pady=10, sticky="w")
+        search_frame.grid(row=1, column=0, pady=10, sticky="ew", padx=15)
 
-        
         tk.Label(
             search_frame, 
             text="Search Products (Part Number, Description):",
@@ -149,7 +151,6 @@ class BaseGenerator(tk.Toplevel, ABC):
             font=("Arial", 12)
         ).pack(side="left", padx=(0, 10))
 
-        #self.search_var = tk.StringVar()
         self.combo_var = tk.StringVar()
         self.combo = ttk.Combobox(
             search_frame, 
@@ -162,13 +163,29 @@ class BaseGenerator(tk.Toplevel, ABC):
         self.combo.bind('<<ComboboxSelected>>', self.on_item_selected)
         self.combo.bind('<Return>', self.on_enter_pressed)
 
-        ttk.Button(search_frame, text="Upload File", command=self.upload_file).pack(padx=10)
-    
+        # Upload File button
+        ttk.Button(search_frame, text="Upload File", command=self.upload_file).pack(side="left", padx=10)
+
+        # Currency switcher
+        self.currency_var = tk.StringVar(value="SAR")
+        currency_combo = ttk.Combobox(
+            search_frame,
+            values=["SAR", "USD"],
+            textvariable=self.currency_var,
+            width=5,
+            state="readonly"
+        )
+        currency_combo.pack(side="left", padx=(10,0))
+        currency_combo.bind("<<ComboboxSelected>>", self.on_currency_changed)
+
     def create_details_section(self):
-        """Create the product details section"""
+        """Create the product details section with improved layout"""
         # Create container frame for both details and treeview
         self.container_frame = tk.Frame(self.main_frame, bg="#F0F0F0")
-        self.container_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)
+        self.container_frame.grid(row=2, column=0, sticky="nsew", padx=15, pady=10)
+        
+        # Configure container frame grid weights
+        self.main_frame.grid_rowconfigure(2, weight=1)
 
         # Left side - Details section
         details_container = tk.Frame(self.container_frame, bg="#F0F0F0")
@@ -211,23 +228,24 @@ class BaseGenerator(tk.Toplevel, ABC):
         # Add spacing at top
         tk.Frame(buttons_frame, height=20, bg="#F0F0F0").pack()
         
-        # Add to Tree button
-        self.add_to_tree_btn = ttk.Button(
+        # Add Selected Items button "+"
+        self.add_btn = ttk.Button(
             buttons_frame,
             text="+",
             width=3,
             command=self.add_selected_items
         )
-        self.add_to_tree_btn.pack(pady=5)
+        self.add_btn.pack(pady=5)
         
-        # Remove from Tree button
-        self.remove_from_tree_btn = ttk.Button(
+        # Remove Selected Items button "-"
+        self.remove_btn = ttk.Button(
             buttons_frame,
             text="-",
             width=3,
-            command=self.remove_selected_item
+            command=self.remove_selected_item,
+            state='disabled'  # Disabled initially, enabled when items exist
         )
-        self.remove_from_tree_btn.pack(pady=5)
+        self.remove_btn.pack(pady=5)
         
         # Move Up button
         self.move_up_btn = ttk.Button(
@@ -247,18 +265,16 @@ class BaseGenerator(tk.Toplevel, ABC):
         )
         self.move_down_btn.pack(pady=5)
 
+        # Clear Details button
         self.clear_details_btn = ttk.Button(
             buttons_frame, 
-            text="Clear All",  # Changed text to be more clear
-            width=8,  # Set a fixed width
+            text="Clear Details",
+            width=12,
             command=self.clear_details
         )
         self.clear_details_btn.pack(pady=5)
-        
-        # Add spacing at bottom
-        tk.Frame(buttons_frame, height=20, bg="#F0F0F0").pack()
 
-    # Add these new methods for moving items
+
     def move_item_up(self):
         """Move selected item up in the treeview"""
         selected = self.item_tree.selection()
@@ -287,7 +303,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         columns = self.get_treeview_columns()
         
         # Create a frame to hold the Treeview and Scrollbar
-        tree_frame = ttk.Frame(self.container_frame)  # Use container_frame instead of main_frame
+        tree_frame = ttk.Frame(self.container_frame)
         tree_frame.pack(side='left', fill="both", expand=True)
 
         # Create vertical scrollbar
@@ -318,8 +334,7 @@ class BaseGenerator(tk.Toplevel, ABC):
     def create_control_buttons(self):
         """Create the control buttons section"""
         btn_frame = tk.Frame(self.main_frame, bg="#00A651")
-        btn_frame.grid(row=4, column=0, pady=5, sticky="ew")
-
+        btn_frame.grid(row=4, column=0, pady=5, sticky="ew", padx=15)
 
         ttk.Button(btn_frame, text="Reset", command=self.reset_items).grid(row=0, column=1, padx=10)
         
@@ -333,6 +348,20 @@ class BaseGenerator(tk.Toplevel, ABC):
         ttk.Button(btn_frame, text="Back to Home", command=self.return_home).grid(row=0, column=4, padx=10)
 
         self.btn_frame = btn_frame
+    
+    '''def create_item_management_section(self):
+        """Create the item management buttons section with checkbox support"""
+        append_item_frame = tk.Frame(self.main_frame, bg='#00A651')
+        append_item_frame.grid(row=3, column=0, pady=10, sticky="ew", padx=15)
+
+        # Only keep Clear Details button
+        clear_details_btn = ttk.Button(
+            append_item_frame, 
+            text="Clear Details", 
+            command=self.clear_details
+        )
+        clear_details_btn.grid(row=0, column=0, padx=10)'''
+
     
     # Abstract methods to be implemented by subclasses
     @abstractmethod
@@ -363,11 +392,49 @@ class BaseGenerator(tk.Toplevel, ABC):
             "Customer": 120,
             "Delivery Date": 100,
             "Location": 120,
-            "Notes": 150
+            "Notes": 150,
+            "Status": 80
         }
         return width_map.get(col, 100)
     
     def on_keyrelease(self, event):
+        typed = self.combo_var.get().lower()
+        
+        # Disable add button while typing
+        if hasattr(self, 'add_btn'):
+            self.add_btn.config(state='disabled')
+        
+        if not typed:
+            # Show full list silently (no popup)
+            self.combo['values'] = self.combo_display_list
+            for child in self.detail_frame.winfo_children():
+                child.destroy()
+            self.detail_labels = {}
+            return
+
+        # Filter products
+        filtered_products = [
+            p for p in self.products
+            if typed in str(p['Part Number']).lower() or typed in str(p['Description']).lower()
+        ]
+        
+        filtered_display = [
+            f"{p['Part Number']} - {p['Description']}" for p in filtered_products
+        ]
+        self.combo['values'] = filtered_display
+
+        # Clear previous details silently
+        for child in self.detail_frame.winfo_children():
+            child.destroy()
+        self.detail_labels = {}
+
+        # Show filtered products
+        for product in filtered_products:
+            self.show_details(product)
+
+
+    
+    '''def on_keyrelease(self, event):
         """Handle key release - maintains original behavior of showing details while typing"""
         typed = self.combo_var.get().lower()
         
@@ -377,7 +444,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         
         if not typed:
             self.combo['values'] = self.combo_display_list
-            self.clear_details()  # Only clear when search is empty
+            self.clear_details()
             return
 
         # Filter products based on user input
@@ -395,12 +462,31 @@ class BaseGenerator(tk.Toplevel, ABC):
         # Clear existing details and show all matches
         self.clear_details()
         
-        # Show all matches in the details frame (just like before)
+        # Show all matches in the details frame
         if filtered_products:
             for product in filtered_products:
                 self.show_details(product)
-
+                '''
+    
     def on_item_selected(self, event):
+        selection = self.combo_var.get()
+        if not selection:
+            return
+
+        part_number = str(selection.split(' - ')[0].strip())
+        product = next((p for p in self.products if str(p.get('Part Number', '')).strip() == part_number), None)
+        
+        if product:
+            self.show_details(product)
+            if hasattr(self, 'add_btn'):
+                self.add_btn.config(state='normal')
+        else:
+            messagebox.showerror("Error", f"Product with part number '{part_number}' not found.")
+            if hasattr(self, 'add_btn'):
+                self.add_btn.config(state='disabled')
+
+
+    '''def on_item_selected(self, event):
         """Handle item selection from combobox"""
         selection = self.combo_var.get()
         if not selection:
@@ -408,8 +494,6 @@ class BaseGenerator(tk.Toplevel, ABC):
 
         # Extract part number from selection
         part_number = str(selection.split(' - ')[0].strip())
-        print(f"Selected raw combobox text: '{selection}'")
-        print(f"Extracted part number: '{part_number}'")
         product = next((p for p in self.products if str(p.get('Part Number', '')).strip() == part_number), None)
         
         if product:
@@ -419,70 +503,19 @@ class BaseGenerator(tk.Toplevel, ABC):
                 self.add_btn.config(state='normal')
         else:
             messagebox.showerror("Error", f"Product with part number '{part_number}' not found.")
-            # Check if add_btn exists before trying to configure it
             if hasattr(self, 'add_btn'):
-                self.add_btn.config(state='disabled')
-
-    def add_item(self, frame_to_remove=None):
-        """Add currently selected product to the items tree"""
-        if not hasattr(self, 'current_product') or self.current_product is None:
-            messagebox.showwarning("Warning", "No valid product selected.")
-            return
-
-        p = self.current_product
-        try:
-            # Get formatted values
-            values = self.format_item_for_tree(p)
-            
-            # Insert into tree
-            self.item_tree.insert("", "end", values=values)
-            self.selected_items.append(p)
-            self.update_remove_button_state()
-
-            # Clear selection
-            self.combo.set('')
-            
-            if frame_to_remove:
-                frame_to_remove.destroy()
-            
-            # Check if add_btn exists before trying to configure it
-            if hasattr(self, 'add_btn'):
-                self.add_btn.config(state='disabled')
-
-        except ValueError as e:
-            messagebox.showerror("Error", f"Invalid data format: {e}")
-    
-
-    '''def on_item_selected(self, event):
-        self.on_enter_pressed(event)'''
-
-    '''def on_item_selected(self, event):
-        """When user selects an item from dropdown, show its details."""
-        selection = self.combo.get()
-        if not selection:
-            return
-
-        # Extract part number from selection and convert to string
-        part_number = str(selection.split(' - ')[0].strip())
-        product = get_product_details(part_number)
-        
-        if product:
-            self.show_details(product)
-            self.add_btn.config(state='normal')
-        else:
-            messagebox.showerror("Error", f"Product with part number '{part_number}' not found.")
-            self.add_btn.config(state='disabled')'''
+                self.add_btn.config(state='disabled')'''
 
     def clear_details(self):
         """Clear all widgets in detail frame"""
-        if self.detail_frame.winfo_children():  # Only show dialog if there are items to clear
+        if self.detail_frame.winfo_children():
             if messagebox.askyesno("Confirm Clear", "Are you sure you want to clear all details?"):
                 for child in self.detail_frame.winfo_children():
                     child.destroy()
                 
                 self.detail_labels = {}
                 self.current_product = None
-                self.combo.set('')  # Clear the combobox selection
+                self.combo.set('')
                 
                 # Update button states
                 if hasattr(self, 'add_btn'):
@@ -495,7 +528,7 @@ class BaseGenerator(tk.Toplevel, ABC):
     def show_details(self, product):
         """Show product details in horizontal layout with checkbox"""
         frame = ttk.Frame(self.detail_frame, borderwidth=1, relief="solid", padding=5)
-        frame.pack(fill='x', pady=2, padx=5)
+        frame.pack(fill='x', pady=2, padx=7)
 
         # Store the product reference
         frame.product = product
@@ -509,26 +542,29 @@ class BaseGenerator(tk.Toplevel, ABC):
         checkbox.pack(side='left', padx=(0, 5))
 
         # Part Number (bold, fixed width)
+        part_number = str(product['Part Number'])
+        if len(part_number) > 15:
+            part_number = part_number[:12] + "..."
         part_label = ttk.Label(
             frame, 
-            text=f"{product['Part Number']}", 
+            text=f"{part_number}", 
             font=('Arial', 9, 'bold'),
-            width=20
+            width=15
         )
-        part_label.pack(side='left', padx=(0, 10))
+        part_label.pack(side='left', padx=(0, 2))
 
         # Description (truncated if too long)
         description = str(product['Description'])
         if len(description) > 50:
-            description = description[:47] + "..."
+            description = description[:43] + "..."
         
         desc_label = ttk.Label(
             frame, 
             text=description, 
             font=('Arial', 9),
-            width=45
+            width=20
         )
-        desc_label.pack(side='left', padx=(0, 10))
+        desc_label.pack(side='left', padx=(0, 5))
 
         # Clear button
         clear_btn = ttk.Button(
@@ -537,7 +573,7 @@ class BaseGenerator(tk.Toplevel, ABC):
             width=3,
             command=lambda f=frame: f.destroy()
         )
-        clear_btn.pack(side='right', padx=(5, 0))
+        clear_btn.pack(side='right', padx=(0, 0))
 
     def add_selected_items(self):
         """Add all checked items to the tree"""
@@ -568,75 +604,11 @@ class BaseGenerator(tk.Toplevel, ABC):
         
         if added_count > 0:
             self.update_remove_button_state()
-            self.combo.set('')  # Clear search
+            self.combo.set('')
             messagebox.showinfo("Items Added", f"Added {added_count} item(s) to the list.")
         else:
             messagebox.showwarning("No Selection", "Please select items using checkboxes first.")
 
-    def create_item_management_section(self):
-        """Create the item management buttons section with checkbox support"""
-        append_item_frame = tk.Frame(self.main_frame, bg='#00A651')
-        append_item_frame.grid(row=3, column=0, pady=10, sticky="w")
-
-
-        # Add Selected Items button (replaces individual Add Item button)
-        self.add_selected_btn = ttk.Button(
-            append_item_frame, 
-            text="+", 
-            command=self.add_selected_items
-        )
-        self.add_selected_btn.grid(row=0, column=1, padx=10)
-
-        # Remove Selected button
-        self.remove_btn = ttk.Button(
-            append_item_frame, 
-            text="-", 
-            command=self.remove_selected_item
-        )
-        self.remove_btn.grid(row=0, column=2, padx=10)
-        self.remove_btn.config(state='disabled')
-
-        # Clear All Details button
-        clear_details_btn = ttk.Button(
-            append_item_frame, 
-            text="Clear Details", 
-            command=self.clear_details
-        )
-        clear_details_btn.grid(row=0, column=3, padx=10)
-
-    
-    '''def select_for_list(self, product, frame):
-        """Add selected product to list"""
-        self.current_product = product
-        self.add_item(frame)
-    
-    def add_item(self, frame_to_remove=None):
-        """Add currently selected product to the items tree"""
-        if not hasattr(self, 'current_product') or self.current_product is None:
-            messagebox.showwarning("Warning", "No valid product selected.")
-            return
-
-        p = self.current_product
-        try:
-            # Get formatted values
-            values = self.format_item_for_tree(p)
-            
-            # Insert into tree
-            self.item_tree.insert("", "end", values=values)
-            self.selected_items.append(p)
-            self.update_remove_button_state()
-
-            # Clear selection
-            self.combo.set('')
-            
-            if frame_to_remove:
-                frame_to_remove.destroy()
-            
-            self.add_item.config(state='disabled')
-
-        except ValueError as e:
-            messagebox.showerror("Error", f"Invalid data format: {e}")
-'''
     def format_item_for_tree(self, product):
         """Format product data for tree display - override in subclasses"""
         qty = format_qty(product.get('Qty', 1))
@@ -726,12 +698,9 @@ class BaseGenerator(tk.Toplevel, ABC):
                 initialfile=default_name
             )
 
-            
-            print(f"User selected file path: {file_path}")
-
             if not file_path:
-                print("Export cancelled by user (no file selected).")
                 return
+                
             # Check if file exists and ask for overwrite confirmation
             if os.path.exists(file_path):
                 confirm = messagebox.askyesno(
@@ -739,7 +708,6 @@ class BaseGenerator(tk.Toplevel, ABC):
                     f"The file '{os.path.basename(file_path)}' already exists.\nDo you want to overwrite it?"
                 )
                 if not confirm:
-                    print("User declined to overwrite existing file.")
                     return
 
             # Proceed with export
@@ -753,11 +721,9 @@ class BaseGenerator(tk.Toplevel, ABC):
                 df_new.to_excel(file_path, index=False)
 
             messagebox.showinfo("Export Successful", f"File saved to:\n{file_path}")
-            print(f"Export successful to {file_path}")
 
         except Exception as e:
             messagebox.showerror("Export Failed", f"Could not save file:\n{e}")
-            print(f"Export failed with error: {e}")
 
     def upload_file(self):
         """Upload product list file and cache it"""
@@ -834,8 +800,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         entry.focus_set()
     
     def on_enter_pressed(self, event):
-        """Handle Enter key in search combobox - now opens dropdown"""
-        # Open the dropdown when Enter is pressed
+        """Handle Enter key in search combobox"""
         self.combo.event_generate('<Button-1>')
     
     def return_home(self):
@@ -843,6 +808,49 @@ class BaseGenerator(tk.Toplevel, ABC):
         self.destroy()
         self.parent.deiconify()
     
+    def get_live_rate(self, from_currency, to_currency):
+        if not API_KEY:
+            print("Error: Exchange Rate API key not set.")
+            return None
+        url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
+        
+        try:
+            response = requests.get(url)
+            data = response.json()
+            
+            if data["result"] != "success":
+                print("Error fetching exchange rate:", data.get("error-type"))
+                return None
+            
+            rate = data["conversion_rates"].get(to_currency)
+            if rate is None:
+                print(f"Currency {to_currency} not found.")
+                return None
+            
+            return rate
+        except Exception as e:
+            print("Error fetching exchange rate:", e)
+    
+    def on_currency_changed(self, event=None):
+        """Update all treeview prices based on selected currency"""
+        target_currency = self.currency_var.get()
+        rate = 1
+        if target_currency != "SAR":
+            rate = self.get_live_rate("SAR", target_currency)
+
+        for item_id in self.item_tree.get_children():
+            values = list(self.item_tree.item(item_id)['values'])
+            # Assuming Unit Price is at index 4
+            sar_price_str = str(values[4]).replace("SAR", "").replace("USD", "").replace(",", "").strip()
+            try:
+                sar_price = float(sar_price_str)
+                new_price = sar_price * rate
+                values[4] = f"{target_currency} {new_price:,.2f}"
+                self.item_tree.item(item_id, values=values)
+            except ValueError:
+                continue
+
+
     # Canvas scroll methods
     def on_frame_configure(self, event=None):
         """Reset the scroll region to encompass the inner frame"""

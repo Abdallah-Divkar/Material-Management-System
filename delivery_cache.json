@@ -1,0 +1,24 @@
+[
+    {
+        "Delivery Note Date": "10-09-22",
+        "Customer": "Othaim Mall",
+        "Address": "Riyadh",
+        "Phone": "0575734683",
+        "Fax": "8579",
+        "Incharge": "Fahad Kazmi",
+        "Customer PO Ref": "PO087487",
+        "Quotation": "QN01693",
+        "Project": "Sensorsss",
+        "Contact Number": "0504682313",
+        "Part Number": "MF550-24M",
+        "Description": "Butterfly Valve Actuator, Modulating, 24 Vac, 550NM",
+        "Supplier": "SE.FD",
+        "Qty": 10,
+        "Unit Price (SAR)": 9416.0,
+        "Total Price (SAR)": 94160.0,
+        "Unit Weight (kg)": 20.0,
+        "Total Weight (kg)": 200.0,
+        "Status": "Pending",
+        "Notes": ""
+    }
+]
