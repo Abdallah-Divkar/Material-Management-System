@@ -535,48 +535,40 @@ class BaseGenerator(tk.Toplevel, ABC):
         frame = ttk.Frame(self.detail_frame, borderwidth=1, relief="solid", padding=5)
         frame.pack(fill='x', pady=2, padx=7)
 
-        # Store the product reference
         frame.product = product
 
-        # Create checkbox variable for this product
+        # Checkbox variable
         checkbox_var = tk.BooleanVar()
         frame.checkbox_var = checkbox_var
 
-        # Checkbox
-        checkbox = ttk.Checkbutton(frame, variable=checkbox_var)
+        # Checkbox with callback
+        checkbox = ttk.Checkbutton(
+            frame,
+            variable=checkbox_var,
+            command=self.update_add_btn_state  # <-- enable/disable "+"
+        )
         checkbox.pack(side='left', padx=(0, 5))
 
-        # Part Number (bold, fixed width)
+        # Part Number
         part_number = str(product['Part Number'])
         if len(part_number) > 15:
             part_number = part_number[:12] + "..."
-        part_label = ttk.Label(
-            frame, 
-            text=f"{part_number}", 
-            font=('Arial', 9, 'bold'),
-            width=15
-        )
+        part_label = ttk.Label(frame, text=part_number, font=('Arial', 9, 'bold'), width=15)
         part_label.pack(side='left', padx=(0, 2))
 
-        # Description (truncated if too long)
+        # Description
         description = str(product['Description'])
         if len(description) > 50:
             description = description[:43] + "..."
-        
-        desc_label = ttk.Label(
-            frame, 
-            text=description, 
-            font=('Arial', 9),
-            width=20
-        )
+        desc_label = ttk.Label(frame, text=description, font=('Arial', 9), width=20)
         desc_label.pack(side='left', padx=(0, 5))
 
-        # Clear button
+        # Clear button with state update
         clear_btn = ttk.Button(
             frame,
             text="✕",
             width=3,
-            command=lambda f=frame: f.destroy()
+            command=lambda f=frame: (f.destroy(), self.update_add_btn_state())
         )
         clear_btn.pack(side='right', padx=(0, 0))
 
@@ -606,6 +598,8 @@ class BaseGenerator(tk.Toplevel, ABC):
         # Remove the frames of added items
         for frame in frames_to_remove:
             frame.destroy()
+
+        self.update_add_btn_state()
         
         if added_count > 0:
             self.update_remove_button_state()
@@ -613,6 +607,15 @@ class BaseGenerator(tk.Toplevel, ABC):
             messagebox.showinfo("Items Added", f"Added {added_count} item(s) to the list.")
         else:
             messagebox.showwarning("No Selection", "Please select items using checkboxes first.")
+
+    def update_add_btn_state(self):
+        """Enable '+' if any search item is checked"""
+        has_checked = any(
+            getattr(child, 'checkbox_var', None) and child.checkbox_var.get()
+            for child in self.detail_frame.winfo_children()
+        )
+        if hasattr(self, 'add_btn'):  # make sure button exists
+            self.add_btn.config(state='normal' if has_checked else 'disabled')
 
     def format_item_for_tree(self, product):
         """Format product data for tree display - override in subclasses"""
