@@ -1,24 +1,20 @@
 [
     {
-        "Delivery Note Date": "11-07-25",
-        "Customer": "Park Hyatt",
-        "Address": "Dammam",
-        "Phone": "0504335401",
-        "Fax": "7479",
-        "Incharge": "Abdallah",
-        "Customer PO Ref": "PO834",
-        "Quotation": "QN8754",
-        "Project": "Temperture VAlve",
-        "Contact Number": "0586736498",
         "Part Number": "ETD800-8",
         "Description": "Duct Temperature Sensor",
-        "Supplier": "SE.FD",
-        "Qty": 5,
-        "Unit Price (SAR)": 27.6,
-        "Total Price (SAR)": 138.0,
-        "Unit Weight (kg)": 0.5,
-        "Total Weight (kg)": 2.5,
-        "Status": "Pending",
-        "Notes": ""
+        "Qty": 7,
+        "Unit Price (SAR)": 0.5,
+        "Unit Weight (kg)": 0.0,
+        "Total Weight (kg)": 0.0,
+        "Item Status": ""
+    },
+    {
+        "Part Number": "TSMN-58011",
+        "Description": "Room Space Temperature Sensor",
+        "Qty": 1,
+        "Unit Price (SAR)": 0.95,
+        "Unit Weight (kg)": 0.0,
+        "Total Weight (kg)": 0.0,
+        "Item Status": ""
     }
 ]

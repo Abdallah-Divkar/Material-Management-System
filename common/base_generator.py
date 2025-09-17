@@ -89,6 +89,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         # Control buttons
         self.create_control_buttons()
     
+    '''
     def create_title_section(self, left_frame_callback=None):
         """
         Create the title section - can be overridden by subclasses.
@@ -136,7 +137,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         title_text = getattr(self, 'module_title', 'Generator')
         title = tk.Label(logo_title_frame, text=title_text, bg="#00A651",
                         fg="white", font=("Arial", 28, "bold"))
-        title.pack(side="left")
+        title.pack(side="left")'''
 
     def create_search_section(self):
         """Create the search/product selection section"""
@@ -348,6 +349,8 @@ class BaseGenerator(tk.Toplevel, ABC):
         # Add Print button if subclass has print_delivery_note_pdf
         if hasattr(self, 'print_delivery_note_pdf'):
             ttk.Button(btn_frame, text="Print Delivery Note", command=self.print_delivery_note_pdf).grid(row=0, column=5, padx=10)
+        elif hasattr(self, 'print_dispatch_note_pdf'):
+            ttk.Button(btn_frame, text="Print Dispatch Note", command=self.print_dispatch_note_pdf).grid(row=0, column=5, padx=10)
 
         ttk.Button(btn_frame, text="Back to Home", command=self.return_home).grid(row=0, column=4, padx=10)
 

@@ -30,7 +30,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.base_generator import BaseGenerator
 from common.utils import format_qty, format_price, format_weight
 
-DELIVERY_INFO_FILE = "delivery_info.json"
+#DELIVERY_INFO_FILE = "delivery_info.json"
 
 class DeliveryNoteGenerator(BaseGenerator):
     """
