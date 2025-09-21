@@ -1,268 +1,529 @@
 """
 Material List Generator Module
+
+This module provides functionality for generating material lists with proper
+title section layout and consistent styling throughout the application.
+
+Author: Material Management System
+Version:  1.0
+Last Modified: 2025-09-17
 """
+
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from datetime import datetime
 import sys
 import os
+import tempfile
+import json
+import tkinter.filedialog as fd
+from datetime import datetime
+from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx2pdf import convert
+from common.utils import replace_placeholder_in_paragraph, save_to_json, load_from_json, parse_float_from_string
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.base_generator import BaseGenerator
-from common.utils import format_qty, format_price
+from common.utils import format_qty, format_price, format_weight, format_currency
+from common.currency_handler import CurrencyHandler
 
 
 class MaterialListGenerator(BaseGenerator):
+    """
+    Material List Generator - for incoming material deliveries
+
+    This class extends BaseGenerator to provide material list specific functionality
+    with improved title section layout and consistent UI structure.
+    """
     def __init__(self, parent):
+        """Initialize the Material List Generator with proper title configuration."""
         self.module_title = "Material List Generator"
         self.export_button_text = "Export Material List"
-        self.default_filename = f"material_list_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        #self.default_filename = f"material_list_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-        # Initialize your StringVars
-        self.project_name_var = tk.StringVar()
-        self.project_code_var = tk.StringVar()
-        self.prepared_by_var = tk.StringVar()
-        self.list_date_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
-        self.project_location_var = tk.StringVar()
-        self.category_filter = tk.StringVar(value="All")
-
-        # FIRST: call super to initialize BaseGenerator and self.main_frame
+        # Initialize BaseGenerator and self.main_frame
         super().__init__(parent, self.module_title)
 
-        # Now, create a scrollable canvas inside the existing self.main_frame
-        self.canvas = tk.Canvas(self.main_frame)
-        self.scrollbar = ttk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.delivery_date_var = tk.StringVar(value=datetime.now().strftime("%d-%m-%y"))
+        self.notes = tk.StringVar()
 
-        # Pack canvas and scrollbar inside self.main_frame
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        # Create the title section with material info callback
+        self.create_title_section(left_frame_callback=self.create_material_info_inline)
+        #self.load_material_info()
 
-        # Create an inner frame inside canvas that will hold your widgets
-        self.scrollable_frame = ttk.Frame(self.canvas)
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
 
-        # Bind mouse wheel scrolling for convenience
-        self.canvas.bind("<Enter>", lambda e: self.canvas.bind_all("<MouseWheel>", self._on_mousewheel))
-        self.canvas.bind("<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>"))
-
-        # Now create your custom widgets inside the scrollable scrollable_frame
+        # Create custom widgets
         self.create_custom_widgets()
+
+    def create_title_section(self, left_frame_callback=None):
+        """
+        Create an improved title section with proper layout structure.
+        
+        Args:
+            left_frame_callback: Optional callback for creating left frame content
+        """
+        # Create main header frame with consistent styling
+        header_frame = tk.Frame(self.main_frame, bg="#00A651", height=120)
+        header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(5, 0))
+        
+        # Configure column weights for responsive layout
+        header_frame.grid_columnconfigure(0, weight=1)  # Left side (material info)
+        header_frame.grid_columnconfigure(1, weight=0)  # Right side (logo + title)
+        
+        # Store header frame reference for child classes
+        self.header_frame = header_frame
+        
+        # Left side: Material Information (if callback provided)
+        if left_frame_callback:
+            self.material_info_frame = left_frame_callback(header_frame)
+        else:
+            # Default empty frame if no callback provided
+            self.material_info_frame = tk.Frame(header_frame, bg="#F0F0F0")
+            self.material_info_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+
+        # Right side: Logo and Title section
+        self.create_logo_title_section(header_frame)
+
+    def create_logo_title_section(self, parent_frame):
+        """
+        Create the logo and title section with consistent styling.
+        
+        Args:
+            parent_frame: Parent frame to contain logo and title elements
+        """
+        logo_title_frame = tk.Frame(parent_frame, bg="#00A651")
+        logo_title_frame.grid(row=0, column=1, sticky="ne", padx=(10, 0), pady=10)
+        
+        # Logo section
+        try:
+            logo_path = os.path.join("assets", "mts_logo.png")
+            if os.path.exists(logo_path):
+                from PIL import Image, ImageTk
+                logo_image = Image.open(logo_path).resize((80, 80), Image.Resampling.LANCZOS)
+                self.logo_photo = ImageTk.PhotoImage(logo_image)
+                logo_label = tk.Label(
+                    logo_title_frame, 
+                    image=self.logo_photo, 
+                    bg="#00A651",
+                    relief="flat"
+                )
+                logo_label.pack(side="left", padx=(0, 15), pady=5)
+        except Exception as e:
+            print(f"Warning: Could not load logo - {e}")
+            # Create placeholder for logo space
+            placeholder = tk.Frame(logo_title_frame, width=80, height=80, bg="#00A651")
+            placeholder.pack(side="left", padx=(0, 15), pady=5)
+        
+        # Title section
+        title_text = getattr(self, 'module_title', 'Generator')
+        title_label = tk.Label(
+            logo_title_frame,
+            text=title_text,
+            bg="#00A651",
+            fg="white",
+            font=("Arial", 24, "bold"),
+            anchor="e",
+            justify="right"
+        )
+        title_label.pack(side="left", pady=5)
+
+    def create_material_info_inline(self, parent_frame):
+        """
+        Create compact material information section for the header
+        with updated field names and empty entries.
+        
+        Args:
+            parent_frame: Parent frame to contain material info
+
+        Returns:
+            tk.LabelFrame: The created material info frame
+        """
+        info_frame = tk.LabelFrame(
+            parent_frame,
+            text="Material Information",
+            bg="#F0F0F0",
+            font=("Arial", 11, "bold"),
+            labelanchor="nw",
+            relief="raised",
+            bd=2
+        )
+        info_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=5)
+        
+        # Configure grid weights for responsive layout
+        for i in range(4):
+            info_frame.grid_columnconfigure(i, weight=1)
+        
+        # Row 0: Customer/Company
+        self.create_info_field(info_frame, "Client:", 0, 0)
+        self.customer_entry = self.create_info_entry(info_frame, "", 0, 1)
+        
+        # Row 1: Address
+        self.create_info_field(info_frame, "Address:", 0, 2)
+        self.address_entry = self.create_info_entry(info_frame, "", 0, 3)
+        
+        # Row 2: Phone and Fax
+        self.create_info_field(info_frame, "Phone Number:", 2, 0)
+        self.phone_entry = self.create_info_entry(info_frame, "", 2, 1)
+        
+        '''self.create_info_field(info_frame, "Fax:", 2, 2)
+        self.fax_entry = self.create_info_entry(info_frame, "", 2, 3)'''
+        
+        # Row 3: Incharge / Contact Person
+        self.create_info_field(info_frame, "Incharge:", 3, 0)
+        self.incharge_entry = self.create_info_entry(info_frame, "", 3, 1)
+        self.create_info_field(info_frame, "Contact  Number:", 3, 2)
+        self.contact_number_entry = self.create_info_entry(info_frame, "", 3, 3)
+        
+        # Row 4: Customer PO Ref and Quotation
+        self.create_info_field(info_frame, "Customer PO Ref:", 4, 0)
+        self.po_ref_entry = self.create_info_entry(info_frame, "", 4, 1)
+        
+        self.create_info_field(info_frame, "Quotation:", 4, 2)
+        self.quotation_entry = self.create_info_entry(info_frame, "", 4, 3)
+        
+        # Row 5: Project
+        self.create_info_field(info_frame, "Project:", 5, 0)
+        self.project_entry = self.create_info_entry(info_frame, "", 5, 1)
+        self.create_info_field(info_frame, "Delivery Date:", 5, 2)
+        self.delivery_date = self.create_info_entry(info_frame, self.delivery_date_var.get(), 5, 3, textvariable=self.delivery_date_var)
+        
+        return info_frame
+
+    def create_info_field(self, parent, text, row, col, width=12):
+        """
+        Create a consistent label field for material information.
+        
+        Args:
+            parent: Parent widget
+            text: Label text
+            row: Grid row
+            col: Grid column
+            width: Label width
+        """
+        label = tk.Label(
+            parent,
+            text=text,
+            bg="#F0F0F0",
+            font=("Arial", 9, "normal"),
+            anchor="w",
+            width=width
+        )
+        label.grid(row=row, column=col, sticky="w", padx=3, pady=2)
+        return label
+
+    def create_info_entry(self, parent, default_value="", row=0, col=0, textvariable=None, width=18):
+        """
+        Create a consistent entry field for material information.
+        
+        Args:
+            parent: Parent widget
+            default_value: Default entry value
+            row: Grid row
+            col: Grid column
+            textvariable: Optional StringVar for the entry
+            width: Entry width
+            
+        Returns:
+            tk.Entry: The created entry widget
+        """
+        entry = tk.Entry(
+            parent,
+            font=("Arial", 9),
+            width=width,
+            relief="sunken",
+            bd=1,
+            textvariable=textvariable
+        )
+        if not textvariable and default_value:
+            entry.insert(0, default_value)
+        entry.grid(row=row, column=col, sticky="ew", padx=3, pady=2)
+        return entry
 
     def _on_mousewheel(self, event):
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
     def create_custom_widgets(self):
-        self.create_info_section()
-        self.create_filter_section()
-        # You can add more sections/buttons here
-
-    def create_info_section(self):
-        info_frame = ttk.LabelFrame(self.scrollable_frame, text="Project Information", padding=(10, 10))
-        info_frame.pack(fill="x", padx=10, pady=5)
-
-        ttk.Label(info_frame, text="Project Name:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        ttk.Entry(info_frame, textvariable=self.project_name_var, width=40).grid(row=0, column=1, padx=5, pady=2)
-
-        ttk.Label(info_frame, text="Project Code:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        ttk.Entry(info_frame, textvariable=self.project_code_var, width=40).grid(row=1, column=1, padx=5, pady=2)
-
-        ttk.Label(info_frame, text="List Date (YYYY-MM-DD):").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        ttk.Entry(info_frame, textvariable=self.list_date_var, width=40).grid(row=2, column=1, padx=5, pady=2)
-
-        ttk.Label(info_frame, text="Prepared By:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
-        ttk.Entry(info_frame, textvariable=self.prepared_by_var).grid(row=3, column=1, sticky="ew", padx=5, pady=5)
-
-        ttk.Label(info_frame, text="Project Location:").grid(row=4, column=0, sticky="w", padx=5, pady=5)
-        ttk.Entry(info_frame, textvariable=self.project_location_var).grid(row=4, column=1, sticky="ew", padx=5, pady=5)
-
-    def create_filter_section(self):
-        filter_frame = ttk.LabelFrame(self.scrollable_frame, text="Filters", padding=(10, 10))
-        filter_frame.pack(fill="x", padx=15, pady=5)
-
-        ttk.Label(filter_frame, text="Category:").pack(side="left", padx=5)
-
-        category_combo = ttk.Combobox(
-            filter_frame,
-            textvariable=self.category_filter,
-            values=["All", "Steel", "Concrete", "Electrical", "Piping", "Safety", "Tools"],
-            width=15,
-            state="readonly"
-        )
-        category_combo.pack(side="left", padx=5)
-        category_combo.bind('<<ComboboxSelected>>', self.on_category_filter_change)
-
-        ttk.Button(filter_frame, text="Generate Summary", command=self.show_summary).pack(side="right", padx=5)
-
-    
+        self.get_treeview_columns()
     def get_treeview_columns(self):
         """Return columns specific to material lists"""
-        return ("Part Number", "Description", "Category", "Qty", "Unit", "Unit Price", "Total Price", "Supplier")
+        return ("Part Number", "Description", "Supplier", "Qty", "Unit Price", "Total Price", "Weight", "Total Weight")
     
     def format_item_for_tree(self, product):
         """Format product data for material list tree display"""
         qty = int(str(product.get('Qty', 1)).split()[0]) if 'pcs' in str(product.get('Qty', 1)) else product.get('Qty', 1)
         unit_price = product.get('Unit Price', 0)
         total_price = qty * unit_price
-        
+        weight = product.get('Weight', 0)
+        total_weight = qty * weight
+
         return (
-            product['Part Number'],
-            product['Description'],
-            product.get('Category', 'General'),  # Add category if available
+            product.get('Part Number', ''),
+            product.get('Description', ''),
+            product.get('Supplier', ''),
             format_qty(qty),
-            "pcs",  # Default unit
-            format_price(unit_price, self.currency_unit.get()),
-            format_price(total_price, self.currency_unit.get()),
-            product.get('Supplier', '')
+            format_currency(unit_price, self.currency_unit.get()),   # ✅ with currency
+            format_currency(total_price, self.currency_unit.get()),
+            format_weight(weight),
+            format_weight(total_weight)
         )
-    
-    def on_category_filter_change(self, event=None):
-        """Handle category filter change"""
-        selected_category = self.category_filter.get()
-        
-        if selected_category == "All":
-            # Show all items
-            for item in self.item_tree.get_children():
-                self.item_tree.set(item, "Category", self.item_tree.set(item, "Category"))
-        else:
-            # This is a simple implementation - in a real app you might want to
-            # filter the displayed items or highlight matching categories
-            pass
-    
-    def show_summary(self):
-        """Show material list summary"""
-        if not self.item_tree.get_children():
-            tk.messagebox.showinfo("No Data", "No materials in the list to summarize.")
-            return
-        
-        # Calculate totals
-        total_items = len(self.item_tree.get_children())
-        total_value = 0
-        total_weight = 0
-        categories = {}
-        
-        for row in self.item_tree.get_children():
-            vals = self.item_tree.item(row)['values']
-            try:
-                # Extract total price (column 6)
-                price_str = vals[6].split()[0]
-                total_value += float(price_str)
-                
-                # Count categories
-                category = vals[2]
-                categories[category] = categories.get(category, 0) + 1
-                
-            except (ValueError, IndexError):
-                continue
-        
-        # Create summary window
-        summary_window = tk.Toplevel(self)
-        summary_window.title("Material List Summary")
-        summary_window.geometry("400x300")
-        summary_window.configure(bg="#F0F0F0")
-        
-        # Summary content
-        tk.Label(
-            summary_window, 
-            text="Material List Summary", 
-            font=("Arial", 16, "bold"),
-            bg="#F0F0F0"
-        ).pack(pady=10)
-        
-        summary_text = f"""
-            Project: {self.project_name_var.get()}
-            Project Code: {self.project_code_var.get()}
-            Date: {self.list_date_var.get()}
 
-            Total Items: {total_items}
-            Total Value: {total_value:.2f} SAR
-
-            Categories:
-            """
-        
-        for category, count in categories.items():
-            summary_text += f"  • {category}: {count} items\n"
-        
-        text_widget = tk.Text(summary_window, height=15, width=50, bg="white")
-        text_widget.pack(padx=20, pady=10, fill="both", expand=True)
-        text_widget.insert("1.0", summary_text)
-        text_widget.config(state="disabled")
-        
-        ttk.Button(
-            summary_window, 
-            text="Close", 
-            command=summary_window.destroy
-        ).pack(pady=10)
-    
     def get_export_data(self):
         """Return data formatted for material list export"""
         data = []
         
-        project_name = self.project_name_var.get().strip()
-        project_code = self.project_code_var.get().strip()
-        list_date = self.list_date_var.get().strip()
-        prepared_by = self.prepared_by_var.get().strip()
-        project_location = self.project_location_var.get().strip()
-        # Validate project information
-        #project_name = self.project_name.get().strip()
-        if not project_name:
-            raise ValueError("Project name is required")
-        
-        list_date = self.list_date_var.get().strip()
-        if not list_date:
-            raise ValueError("List date is required")
+        # Debug: check material info
+        customer = self.customer_entry.get().strip()
+        print(f"[DEBUG] Customer entry: '{customer}'")
+        if not customer:
+            raise ValueError("Customer name is required")
+
+        delivery_date = self.delivery_date.get().strip()
+        print(f"[DEBUG] Delivery date entry: '{delivery_date}'")
+        if not delivery_date:
+            raise ValueError("Delivery date is required")
+
+        # Debug: check treeview rows
+        children = self.item_tree.get_children()
+        print(f"[DEBUG] Number of rows in treeview: {len(children)}")
+        if not children:
+            print("[DEBUG] No items found in treeview!")
+            return []
         
         # Process each item in the tree
-        for row in self.item_tree.get_children():
+        for idx, row in enumerate(children):
             vals = self.item_tree.item(row)['values']
-            
-            # Basic validation
-            if not vals[0] or not vals[1]:  # Part Number and Description
-                continue
-            
+
             try:
-                qty = int(vals[3].split()[0])  # Extract number from "5 pcs"
-                unit_price = float(vals[5].split()[0])  # Extract number from "10.50 SAR"
-                total_price = float(vals[6].split()[0])  # Extract number from "52.50 SAR"
-            except (ValueError, IndexError):
+                qty = int(str(vals[3]).split()[0])  # index 3 is Qty
+                price = parse_float_from_string(vals[4])  # index 4 is Unit Price
+                weight = parse_float_from_string(vals[6])  # index 6 is Weight
+            except Exception as e:
+                print(f"[DEBUG] Skipping row {idx} due to parse error: {e}")
                 continue
-            
+
+            total_price = qty * price
+            total_weight = qty * weight
+
             row_data = {
-                'Project Name': project_name,
-                'Project Code': self.project_code_var.get(),
-                'Project Location': project_location,
-                'List Date': list_date,
-                'Prepared By': self.prepared_by_var.get(),
+                'Delivery Note Date': self.delivery_date.get().strip(),
+                'Customer': self.customer_entry.get().strip(),
+                'Address': self.address_entry.get().strip(),
+                'Phone': self.phone_entry.get().strip(),
+                'Incharge': self.incharge_entry.get().strip(),
+                'Customer PO Ref': self.po_ref_entry.get().strip(),
+                'Quotation': self.quotation_entry.get().strip(),
+                'Project': self.project_entry.get().strip(),
+                'Contact Number': self.contact_number_entry.get().strip(),
                 'Part Number': vals[0],
                 'Description': vals[1],
-                'Category': vals[2],
+                'Supplier': vals[2],
                 'Qty': qty,
-                'Unit': vals[4],
-                'Unit Price (SAR)': unit_price,
-                'Total Price (SAR)': total_price,
-                'Supplier': vals[7]
+                'Unit Price': format_currency(price, self.currency_unit.get()),
+                'Total Price': format_currency(total_price, self.currency_unit.get()),
+                'Unit Weight (kg)': round(weight, 3),
+                'Total Weight (kg)': round(total_weight, 3),
+                'Notes': self.notes.get().strip()
             }
+
             data.append(row_data)
-        
+
+
+        print(f"[DEBUG] Total exportable rows: {len(data)}")
         return data
     
+    def export_template(self):
+        """
+        Export material list template with required columns (uses default template).
+        """
+        try:
+            export_data = self.get_export_data()
+
+            if not export_data:
+                raise ValueError("No data to export. Please add items to the material list.")
+
+            # ✅ Use default template path instead of asking
+            default_template = os.path.join(os.getcwd(), "assets", "material_list_template.docx")
+
+            if not os.path.exists(default_template):
+                raise FileNotFoundError(f"Default template not found:\n{default_template}")
+
+            doc = Document(default_template)
+
+            # Mapping of placeholders to actual values
+            placeholders = {
+                "Customer": self.customer_entry.get().strip(),
+                "Address": self.address_entry.get().strip(),
+                "Phone_Num": self.phone_entry.get().strip(),
+                "Incharge": self.incharge_entry.get().strip(),
+                "Customer_PO": self.po_ref_entry.get().strip(),
+                "Quotation": self.quotation_entry.get().strip(),
+                "Project_Name": self.project_entry.get().strip(),
+                "Contact_Num": self.contact_number_entry.get().strip(),
+                "Date": self.delivery_date.get().strip()
+            }
+
+            # Replace placeholders in document paragraphs, headers, footers
+            for paragraph in doc.paragraphs:
+                for key, value in placeholders.items():
+                    replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
+            for section in doc.sections:
+                for header_paragraph in section.header.paragraphs:
+                    for key, value in placeholders.items():
+                        replace_placeholder_in_paragraph(header_paragraph, f"{{{key}}}", value)
+                for footer_paragraph in section.footer.paragraphs:
+                    for key, value in placeholders.items():
+                        replace_placeholder_in_paragraph(footer_paragraph, f"{{{key}}}", value)
+
+            # Populate item table
+            self.populate_item_table(doc, export_data)
+
+            # ✅ Auto-generate filename
+            current_date = datetime.now().strftime("%d-%m-%y")
+            client_name = self.customer_entry.get().strip() or "Client"
+            default_filename = f"DN0{current_date}-{client_name}.docx"
+
+            # ✅ Save automatically into "exports" folder (no dialog)
+            export_folder = os.path.join(os.getcwd(), "exports")
+            os.makedirs(export_folder, exist_ok=True)
+            save_path = os.path.join(export_folder, default_filename)
+
+            doc.save(save_path)
+            save_to_json(export_data)
+            messagebox.showinfo("Success", f"Material list exported successfully:\n{save_path}")
+
+        except Exception as e:
+            messagebox.showerror("Export Failed", f"Failed to export material list:\n{str(e)}")
+
+    def populate_item_table(self, doc, export_data):
+        """
+        Populate the item table in the Word document.
+        
+        Args:
+            doc: Word document object
+            export_data: List of item data dictionaries
+        """
+        if not doc.tables:
+            return
+
+        # Find the correct table (assuming first table with proper headers)
+        item_table = None
+        for table in doc.tables:
+            if len(table.rows) > 0:
+                headers = [cell.text.strip().lower() for cell in table.rows[0].cells]
+                if 'no.' in headers and 'item' in headers and 'description' in headers:
+                    item_table = table
+                    break
+
+        if not item_table:
+            raise ValueError("Could not find the item table in the Word template.")
+
+        # Clear existing rows (except header)
+        for row in item_table.rows[1:]:
+            table_element = item_table._tbl
+            table_element.remove(row._tr)
+
+        # Add new rows for each item
+        for i, item in enumerate(export_data, start=1):
+            row_cells = item_table.add_row().cells
+            if len(row_cells) >= 4:
+                row_cells[0].text = str(i)
+                row_cells[1].text = str(item['Part Number'])
+                row_cells[2].text = str(item['Description'])
+                row_cells[3].text = str(item['Supplier'])
+                row_cells[4].text = str(item['Qty'])
+                row_cells[5].text = str(item.get('Unit Price', 0))  # Already formatted with currency
+                row_cells[6].text = str(item.get('Total Price', 0))
+                row_cells[7].text = str(item.get('Unit Weight (kg)', '0'))
+                row_cells[8].text = str(item.get('Total Weight (kg)', '0'))
+
     def get_column_width(self, col):
-        """Get column width for material list treeview"""
+        """
+        Get column width for material list treeview.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            int: Column width in pixels
+        """
         width_map = {
             "Part Number": 100,
-            "Description": 180,
-            "Category": 80,
+            "Description": 200,
             "Qty": 60,
-            "Unit": 50,
+            "Supplier": 120,
             "Unit Price": 80,
-            "Total Price": 90,
-            "Supplier": 120
+            "Total Price": 80,
+            "Weight": 80,
+            "Total Weight": 80
         }
         return width_map.get(col, 100)
+    
+    def print_material_list_pdf(self):
+        """
+        Export material list as PDF and send to the system printer.
+        """
+        try:
+            # Step 2a: Export data
+            export_data = self.get_export_data()
+            if not export_data:
+                messagebox.showwarning("No Data", "No items to export.")
+                return
+
+            # Step 2b: Export as PDF (create temporary PDF file)
+            client_name = self.customer_entry.get().strip() or "Client"
+            current_date = datetime.now().strftime("%d-%m-%y")
+            pdf_filename = f"DN0{current_date}-{client_name}.pdf"
+            temp_dir = tempfile.gettempdir()
+            pdf_path = os.path.join(temp_dir, pdf_filename)
+
+            # Ask user for Word template
+            from tkinter import filedialog as fd
+            template_path = fd.askopenfilename(
+                filetypes=[("Word Documents", "*.docx")],
+                title="Select Word Template"
+            )
+            if not template_path:
+                return
+
+            # Fill template with placeholders
+            doc = Document(template_path)
+            placeholders = {
+                "Customer": self.customer_entry.get().strip(),
+                "Address": self.address_entry.get().strip(),
+                "Incharge": self.incharge_entry.get().strip(),
+                "Customer_PO": self.po_ref_entry.get().strip(),
+                "Quotation": self.quotation_entry.get().strip(),
+                "Project_Name": self.project_entry.get().strip(),
+                "Contact_Num": self.contact_number_entry.get().strip(),
+                "Date": self.delivery_date.get().strip()
+            }
+            for paragraph in doc.paragraphs:
+                for key, value in placeholders.items():
+                    replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
+
+            self.populate_item_table(doc, export_data)
+
+            # Save temp Word file
+            temp_docx = os.path.join(temp_dir, "temp_material_list.docx")
+            doc.save(temp_docx)
+
+            # Convert Word to PDF
+            convert(temp_docx, pdf_path)
+
+            # Step 2c: Print the PDF using system default viewer
+            if os.name == "nt":  # Windows
+                os.startfile(pdf_path, "print")
+            elif sys.platform == "darwin":  # macOS
+                os.system(f"lp '{pdf_path}'")
+            else:  # Linux
+                os.system(f"lp '{pdf_path}'")
+
+            messagebox.showinfo("Success", f"Material list sent to printer.")
+
+        except Exception as e:
+            messagebox.showerror("Print Failed", f"Failed to print material list:\n{e}")
 
 
 # Test the module independently
@@ -271,5 +532,11 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw()  # Hide root window
     
-    app = MaterialListGenerator(root)
-    app.mainloop()
+    try:
+        app = MaterialListGenerator(root)
+        app.mainloop()
+    except Exception as e:
+        print(f"Error running material list generator: {e}")
+        messagebox.showerror("Error", f"Failed to start application:\n{e}")
+    finally:
+        root.destroy()

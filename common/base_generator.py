@@ -9,11 +9,13 @@ import pandas as pd
 from abc import ABC, abstractmethod
 
 from common.excel_handler import get_products, get_product_details
-from common.utils import format_qty, format_price, format_weight
+from common.utils import format_qty, format_price, format_weight, format_currency
+from common.currency_handler import CurrencyHandler
 
 load_dotenv()
 
 API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
+
 
 class BaseGenerator(tk.Toplevel, ABC):
     """Base class for all generator modules with improved layout structure"""
@@ -351,6 +353,9 @@ class BaseGenerator(tk.Toplevel, ABC):
             ttk.Button(btn_frame, text="Print Delivery Note", command=self.print_delivery_note_pdf).grid(row=0, column=5, padx=10)
         elif hasattr(self, 'print_dispatch_note_pdf'):
             ttk.Button(btn_frame, text="Print Dispatch Note", command=self.print_dispatch_note_pdf).grid(row=0, column=5, padx=10)
+        elif hasattr(self, 'print_material_list_pdf'):
+            ttk.Button(btn_frame, text="Print Material List", command=self.print_material_list_pdf).grid(row=0, column=5, padx=10)
+
 
         ttk.Button(btn_frame, text="Back to Home", command=self.return_home).grid(row=0, column=4, padx=10)
 
@@ -622,6 +627,7 @@ class BaseGenerator(tk.Toplevel, ABC):
 
     def format_item_for_tree(self, product):
         """Format product data for tree display - override in subclasses"""
+
         qty = format_qty(product.get('Qty', 1))
         price = format_price(product.get('Unit Price', 0), self.currency_unit.get())
         weight = format_weight(product.get('Weight', 0))
@@ -678,6 +684,24 @@ class BaseGenerator(tk.Toplevel, ABC):
         for row in self.item_tree.get_children():
             self.item_tree.delete(row)
         self.update_remove_button_state()
+
+    def refresh_treeview(self):
+        """Clear and reload the treeview based on current selected_items"""
+        # Clear all items in the treeview
+        for row in self.item_tree.get_children():
+            self.item_tree.delete(row)
+        
+        # Reinsert items from selected_items
+        for product in self.selected_items:
+            try:
+                values = self.format_item_for_tree(product)
+                self.item_tree.insert("", "end", values=values)
+            except Exception as e:
+                print(f"Error refreshing item {product.get('Part Number', '')}: {e}")
+        
+        # Update remove button state
+        self.update_remove_button_state()
+
     
     def update_remove_button_state(self):
         """Update remove button state based on items"""
@@ -769,7 +793,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         column_name = self.item_tree["columns"][column_id]
         
         # Only allow editing Qty and unit price columns by default
-        if column_name not in ["Qty", "Unit Price"]:
+        if column_name not in ["Qty", "Unit Price", "Weight"]:
             return
             
         current_value = self.item_tree.item(item)['values'][column_id]
@@ -843,23 +867,30 @@ class BaseGenerator(tk.Toplevel, ABC):
             print("Error fetching exchange rate:", e)
     
     def on_currency_changed(self, event=None):
-        """Update all treeview prices based on selected currency"""
         target_currency = self.currency_var.get()
+        self.currency_unit.set(target_currency)
+
         rate = 1
         if target_currency != "SAR":
             rate = self.get_live_rate("SAR", target_currency)
+            if not rate:
+                rate = 1  # fallback
 
         for item_id in self.item_tree.get_children():
             values = list(self.item_tree.item(item_id)['values'])
-            # Assuming Unit Price is at index 4
-            sar_price_str = str(values[4]).replace("SAR", "").replace("USD", "").replace(",", "").strip()
+            price_str = str(values[4])
+            # Remove currency symbol and commas
+            for symbol in ["SAR", "USD", ","]:
+                price_str = price_str.replace(symbol, "")
             try:
-                sar_price = float(sar_price_str)
+                sar_price = float(price_str.strip())
                 new_price = sar_price * rate
-                values[4] = f"{target_currency} {new_price:,.2f}"
+                # Use your format_price here to maintain consistency
+                values[4] = format_price(new_price, target_currency)
                 self.item_tree.item(item_id, values=values)
             except ValueError:
                 continue
+
 
 
     # Canvas scroll methods

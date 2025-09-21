@@ -28,6 +28,15 @@ def format_weight(weight):
         return f"{weight_val:.3f} kg"
     except (ValueError, TypeError):
         return "0.000 kg"
+    
+def format_currency(value, currency="SAR"):
+    """Format numbers with the given currency and 2 decimals"""
+    try:
+        value = float(value) if value not in (None, "") else 0.0
+        return f"{currency} {value:,.2f}"
+    except (ValueError, TypeError):
+        return f"{currency} 0.00"
+
 
 def validate_numeric(value, field_name, min_val=0):
     """Validate numeric input"""
