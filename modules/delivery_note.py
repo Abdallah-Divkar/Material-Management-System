@@ -74,7 +74,7 @@ class DeliveryNoteGenerator(BaseGenerator):
             left_frame_callback: Optional callback for creating left frame content
         """
         # Create main header frame with consistent styling
-        header_frame = tk.Frame(self.main_frame, bg="#00A651", height=120)
+        header_frame = tk.Frame(self.main_frame, bg="#00A695", height=120)
         header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(5, 0))
         
         # Configure column weights for responsive layout
@@ -102,7 +102,7 @@ class DeliveryNoteGenerator(BaseGenerator):
         Args:
             parent_frame: Parent frame to contain logo and title elements
         """
-        logo_title_frame = tk.Frame(parent_frame, bg="#00A651")
+        logo_title_frame = tk.Frame(parent_frame, bg="#00A695")
         logo_title_frame.grid(row=0, column=1, sticky="ne", padx=(10, 0), pady=10)
         
         # Logo section
@@ -115,14 +115,14 @@ class DeliveryNoteGenerator(BaseGenerator):
                 logo_label = tk.Label(
                     logo_title_frame, 
                     image=self.logo_photo, 
-                    bg="#00A651",
+                    bg="#00A695",
                     relief="flat"
                 )
                 logo_label.pack(side="left", padx=(0, 15), pady=5)
         except Exception as e:
             print(f"Warning: Could not load logo - {e}")
             # Create placeholder for logo space
-            placeholder = tk.Frame(logo_title_frame, width=80, height=80, bg="#00A651")
+            placeholder = tk.Frame(logo_title_frame, width=80, height=80, bg="#00A695")
             placeholder.pack(side="left", padx=(0, 15), pady=5)
         
         # Title section
@@ -130,7 +130,7 @@ class DeliveryNoteGenerator(BaseGenerator):
         title_label = tk.Label(
             logo_title_frame,
             text=title_text,
-            bg="#00A651",
+            bg="#00A695",
             fg="white",
             font=("Arial", 24, "bold"),
             anchor="e",
@@ -203,7 +203,7 @@ class DeliveryNoteGenerator(BaseGenerator):
         
         return info_frame
 
-    def create_info_field(self, parent, text, row, col, width=12):
+    def create_info_field(self, parent, text, row, col, width=15):
         """
         Create a consistent label field for delivery information.
         
@@ -222,7 +222,7 @@ class DeliveryNoteGenerator(BaseGenerator):
             anchor="w",
             width=width
         )
-        label.grid(row=row, column=col, sticky="w", padx=3, pady=2)
+        label.grid(row=row, column=col, sticky="w", padx=3, pady=0)
         return label
 
     def create_info_entry(self, parent, default_value="", row=0, col=0, textvariable=None, width=18):
@@ -250,7 +250,7 @@ class DeliveryNoteGenerator(BaseGenerator):
         )
         if not textvariable and default_value:
             entry.insert(0, default_value)
-        entry.grid(row=row, column=col, sticky="ew", padx=3, pady=2)
+        entry.grid(row=row, column=col, sticky="ew", padx=0, pady=2)
         return entry
 
     '''def save_delivery_info(self):
@@ -416,10 +416,8 @@ class DeliveryNoteGenerator(BaseGenerator):
                 'Description': vals[1],
                 'Supplier': vals[3],
                 'Qty': qty,
-                'Unit Price (SAR)': price,
-                'Total Price (SAR)': round(total_price, 2),
+                'Unit Price': price,
                 'Unit Weight (kg)': round(weight, 3),
-                'Total Weight (kg)': round(total_weight, 3),
                 'Status': vals[6] if len(vals) > 6 else 'Pending',
                 'Notes': self.notes.get().strip()
             }

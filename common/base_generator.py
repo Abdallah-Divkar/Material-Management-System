@@ -7,6 +7,9 @@ from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 import pandas as pd
 from abc import ABC, abstractmethod
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 from common.excel_handler import get_products, get_product_details
 from common.utils import format_qty, format_price, format_weight, format_currency
@@ -25,7 +28,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         self.parent = parent
         self.title(title)
         self.geometry("1200x900")  # Increased size for better layout
-        self.configure(bg="#00A651")
+        self.configure(bg="#00A695")
         
         # Common attributes
         self.products = get_products()
@@ -54,7 +57,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         """Create the base UI components common to all generators"""
         
         # Create main canvas and scrollbar for the entire window
-        self.main_canvas = tk.Canvas(self, bg="#00A651", highlightthickness=0)
+        self.main_canvas = tk.Canvas(self, bg="#00A695", highlightthickness=0)
         self.main_scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.main_canvas.yview)
         self.main_canvas.configure(yscrollcommand=self.main_scrollbar.set)
 
@@ -63,7 +66,7 @@ class BaseGenerator(tk.Toplevel, ABC):
         self.main_scrollbar.pack(side="right", fill="y", pady=15)
 
         # Create main frame inside the canvas
-        self.main_frame = tk.Frame(self.main_canvas, bg="#00A651")
+        self.main_frame = tk.Frame(self.main_canvas, bg="#00A695")
         self.main_canvas_frame = self.main_canvas.create_window((0, 0), window=self.main_frame, anchor="nw")
 
         # Configure main frame grid
@@ -143,13 +146,13 @@ class BaseGenerator(tk.Toplevel, ABC):
 
     def create_search_section(self):
         """Create the search/product selection section"""
-        search_frame = tk.Frame(self.main_frame, bg="#00A651")
+        search_frame = tk.Frame(self.main_frame, bg="#00A695")
         search_frame.grid(row=1, column=0, pady=10, sticky="ew", padx=15)
 
         tk.Label(
             search_frame, 
             text="Search Products (Part Number, Description):",
-            bg="#00A651", 
+            bg="#00A695", 
             fg="white", 
             font=("Arial", 12)
         ).pack(side="left", padx=(0, 10))
@@ -249,6 +252,16 @@ class BaseGenerator(tk.Toplevel, ABC):
             state='disabled'  # Disabled initially, enabled when items exist
         )
         self.remove_btn.pack(pady=5)
+
+        # Select All button
+        self.select_all_btn = ttk.Button(
+            buttons_frame,
+            text="All",
+            width=3,
+            command=self.select_all_items
+        )
+        self.select_all_btn.pack(pady=5)
+
         
         # Move Up button
         self.move_up_btn = ttk.Button(
@@ -336,44 +349,30 @@ class BaseGenerator(tk.Toplevel, ABC):
 
     def create_control_buttons(self):
         """Create the control buttons section"""
-        btn_frame = tk.Frame(self.main_frame, bg="#00A651")
+        btn_frame = tk.Frame(self.main_frame, bg="#00A695")
         btn_frame.grid(row=4, column=0, pady=5, sticky="ew", padx=15)
 
         ttk.Button(btn_frame, text="Reset", command=self.reset_items).grid(row=0, column=1, padx=10)
         
         # Export button text customizable by subclass
-        export_text = getattr(self, 'export_button_text', 'Export to Excel')
-        ttk.Button(btn_frame, text=export_text, command=self.export_to_excel).grid(row=0, column=2, padx=10)
+        ttk.Button(btn_frame, text='Export to Excel', command=self.export_to_excel).grid(row=0, column=2, padx=10)
         
         if hasattr(self, 'export_template'):
-            ttk.Button(btn_frame, text="Export as Template", command=self.export_template).grid(row=0, column=3, padx=10)
+            export_text = getattr(self, 'export_button_text', 'Export as Template')
+            ttk.Button(btn_frame, text=export_text, command=self.export_template).grid(row=0, column=3, padx=10)
 
         # Add Print button if subclass has print_delivery_note_pdf
         if hasattr(self, 'print_delivery_note_pdf'):
-            ttk.Button(btn_frame, text="Print Delivery Note", command=self.print_delivery_note_pdf).grid(row=0, column=5, padx=10)
+            ttk.Button(btn_frame, text="Print", command=self.print_delivery_note_pdf).grid(row=0, column=4, padx=10)
         elif hasattr(self, 'print_dispatch_note_pdf'):
-            ttk.Button(btn_frame, text="Print Dispatch Note", command=self.print_dispatch_note_pdf).grid(row=0, column=5, padx=10)
+            ttk.Button(btn_frame, text="Print", command=self.print_dispatch_note_pdf).grid(row=0, column=4, padx=10)
         elif hasattr(self, 'print_material_list_pdf'):
-            ttk.Button(btn_frame, text="Print Material List", command=self.print_material_list_pdf).grid(row=0, column=5, padx=10)
+            ttk.Button(btn_frame, text="Print", command=self.print_material_list_pdf).grid(row=0, column=4, padx=10)
 
 
-        ttk.Button(btn_frame, text="Back to Home", command=self.return_home).grid(row=0, column=4, padx=10)
+        ttk.Button(btn_frame, text="Home", command=self.return_home).grid(row=0, column=5, padx=10)
 
         self.btn_frame = btn_frame
-
-    
-    '''def create_item_management_section(self):
-        """Create the item management buttons section with checkbox support"""
-        append_item_frame = tk.Frame(self.main_frame, bg='#00A651')
-        append_item_frame.grid(row=3, column=0, pady=10, sticky="ew", padx=15)
-
-        # Only keep Clear Details button
-        clear_details_btn = ttk.Button(
-            append_item_frame, 
-            text="Clear Details", 
-            command=self.clear_details
-        )
-        clear_details_btn.grid(row=0, column=0, padx=10)'''
 
     
     # Abstract methods to be implemented by subclasses
@@ -444,42 +443,6 @@ class BaseGenerator(tk.Toplevel, ABC):
         # Show filtered products
         for product in filtered_products:
             self.show_details(product)
-
-
-    
-    '''def on_keyrelease(self, event):
-        """Handle key release - maintains original behavior of showing details while typing"""
-        typed = self.combo_var.get().lower()
-        
-        # Check if add_btn exists before trying to configure it  
-        if hasattr(self, 'add_btn'):
-            self.add_btn.config(state='disabled')
-        
-        if not typed:
-            self.combo['values'] = self.combo_display_list
-            self.clear_details()
-            return
-
-        # Filter products based on user input
-        filtered_products = [
-            p for p in self.products
-            if (typed in str(p['Part Number']).lower() or
-                typed in str(p['Description']).lower())
-        ]
-        
-        filtered_display = [
-            f"{p['Part Number']} - {p['Description']}" for p in filtered_products
-        ]
-        self.combo['values'] = filtered_display
-
-        # Clear existing details and show all matches
-        self.clear_details()
-        
-        # Show all matches in the details frame
-        if filtered_products:
-            for product in filtered_products:
-                self.show_details(product)
-                '''
     
     def on_item_selected(self, event):
         selection = self.combo_var.get()
@@ -497,27 +460,6 @@ class BaseGenerator(tk.Toplevel, ABC):
             messagebox.showerror("Error", f"Product with part number '{part_number}' not found.")
             if hasattr(self, 'add_btn'):
                 self.add_btn.config(state='disabled')
-
-
-    '''def on_item_selected(self, event):
-        """Handle item selection from combobox"""
-        selection = self.combo_var.get()
-        if not selection:
-            return
-
-        # Extract part number from selection
-        part_number = str(selection.split(' - ')[0].strip())
-        product = next((p for p in self.products if str(p.get('Part Number', '')).strip() == part_number), None)
-        
-        if product:
-            self.show_details(product)
-            # Check if add_btn exists before trying to configure it
-            if hasattr(self, 'add_btn'):
-                self.add_btn.config(state='normal')
-        else:
-            messagebox.showerror("Error", f"Product with part number '{part_number}' not found.")
-            if hasattr(self, 'add_btn'):
-                self.add_btn.config(state='disabled')'''
 
     def clear_details(self):
         """Clear all widgets in detail frame"""
@@ -677,6 +619,21 @@ class BaseGenerator(tk.Toplevel, ABC):
                 self.selected_items.pop(index)
 
         self.update_remove_button_state()
+
+    def select_all_items(self):
+        """Check all items currently displayed in the detail frame and add them to treeview"""
+        any_item = False
+        for child in self.detail_frame.winfo_children():
+            if hasattr(child, 'checkbox_var'):
+                child.checkbox_var.set(True)
+                any_item = True
+        
+        if any_item:
+            self.update_add_btn_state()
+            self.add_selected_items()
+        else:
+            messagebox.showinfo("No Items", "There are no items to select.")
+
     
     def reset_items(self):
         """Reset all items"""
@@ -711,20 +668,17 @@ class BaseGenerator(tk.Toplevel, ABC):
             self.remove_btn.config(state='disabled')
     
     def export_to_excel(self):
-        """Export items to Excel - uses get_export_data() from subclass"""
+        """Export items to Excel - uses get_export_data() from subclass with specific column widths"""
         if not self.item_tree.get_children():
             messagebox.showinfo("No Data", "No items to export.")
             return
 
-        # Get export data from subclass
         try:
             data = self.get_export_data()
-            
             if not data:
                 messagebox.showinfo("No Valid Data", "No valid rows to export.")
                 return
 
-            # File selection
             default_name = getattr(self, 'default_filename', 'export.xlsx')
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
@@ -732,11 +686,10 @@ class BaseGenerator(tk.Toplevel, ABC):
                 title=f"Save {getattr(self, 'module_title', 'Export')} As",
                 initialfile=default_name
             )
-
             if not file_path:
                 return
-                
-            # Check if file exists and ask for overwrite confirmation
+
+            # Check overwrite
             if os.path.exists(file_path):
                 confirm = messagebox.askyesno(
                     "Confirm Overwrite",
@@ -745,21 +698,32 @@ class BaseGenerator(tk.Toplevel, ABC):
                 if not confirm:
                     return
 
-            # Proceed with export
             df_new = pd.DataFrame(data)
-            if os.path.exists(file_path):
-                # Load existing and combine
-                existing_df = pd.read_excel(file_path)
-                df_combined = pd.concat([existing_df, df_new], ignore_index=True)
-                df_combined.to_excel(file_path, index=False)
-            else:
-                df_new.to_excel(file_path, index=False)
+            df_new.to_excel(file_path, index=False, engine='openpyxl')
 
+            # Open workbook to set specific column widths
+            wb = load_workbook(file_path)
+            ws = wb.active
+
+            # Map of specific column widths
+            width_map = {
+                "Part Number": 20,
+                "Description": 40,
+                "Qty": 10,
+                "Supplier": 20,
+                "Unit Price": 15,
+                "Weight": 12
+            }
+
+            for i, col in enumerate(df_new.columns, 1):
+                if col in width_map:
+                    ws.column_dimensions[get_column_letter(i)].width = width_map[col]
+
+            wb.save(file_path)
             messagebox.showinfo("Export Successful", f"File saved to:\n{file_path}")
 
         except Exception as e:
             messagebox.showerror("Export Failed", f"Could not save file:\n{e}")
-
     def upload_file(self):
         """Upload product list file and cache it"""
         file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])

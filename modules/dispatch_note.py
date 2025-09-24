@@ -58,7 +58,7 @@ class DispatchNoteGenerator(BaseGenerator):
             left_frame_callback: Optional callback for creating left frame content
         """
         # Create main header frame with consistent styling
-        header_frame = tk.Frame(self.main_frame, bg="#00A651", height=120)
+        header_frame = tk.Frame(self.main_frame, bg="#00A695", height=120)
         header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(5, 0))
         
         # Configure column weights for responsive layout
@@ -85,7 +85,7 @@ class DispatchNoteGenerator(BaseGenerator):
         Args:
             parent_frame: Parent frame to contain logo and title elements
         """
-        logo_title_frame = tk.Frame(parent_frame, bg="#00A651")
+        logo_title_frame = tk.Frame(parent_frame, bg="#00A695")
         logo_title_frame.grid(row=0, column=1, sticky="ne", padx=(10, 0), pady=10)
         
         # Logo section
@@ -98,14 +98,14 @@ class DispatchNoteGenerator(BaseGenerator):
                 logo_label = tk.Label(
                     logo_title_frame, 
                     image=self.logo_photo, 
-                    bg="#00A651",
+                    bg="#00A695",
                     relief="flat"
                 )
                 logo_label.pack(side="left", padx=(0, 15), pady=5)
         except Exception as e:
             print(f"Warning: Could not load logo - {e}")
             # Create placeholder for logo space
-            placeholder = tk.Frame(logo_title_frame, width=80, height=80, bg="#00A651")
+            placeholder = tk.Frame(logo_title_frame, width=80, height=80, bg="#00A695")
             placeholder.pack(side="left", padx=(0, 15), pady=5)
         
         # Title section
@@ -113,7 +113,7 @@ class DispatchNoteGenerator(BaseGenerator):
         title_label = tk.Label(
             logo_title_frame,
             text=title_text,
-            bg="#00A651",
+            bg="#00A695",
             fg="white",
             font=("Arial", 24, "bold"),
             anchor="e",
@@ -186,7 +186,7 @@ class DispatchNoteGenerator(BaseGenerator):
         
         return info_frame
 
-    def create_info_field(self, parent, text, row, col, width=12):
+    def create_info_field(self, parent, text, row, col, width=15):
         """
         Create a consistent label field for dispatch information.
         

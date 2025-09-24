@@ -66,7 +66,7 @@ class MaterialListGenerator(BaseGenerator):
             left_frame_callback: Optional callback for creating left frame content
         """
         # Create main header frame with consistent styling
-        header_frame = tk.Frame(self.main_frame, bg="#00A651", height=120)
+        header_frame = tk.Frame(self.main_frame, bg="#00A695", height=120)
         header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(5, 0))
         
         # Configure column weights for responsive layout
@@ -94,7 +94,7 @@ class MaterialListGenerator(BaseGenerator):
         Args:
             parent_frame: Parent frame to contain logo and title elements
         """
-        logo_title_frame = tk.Frame(parent_frame, bg="#00A651")
+        logo_title_frame = tk.Frame(parent_frame, bg="#00A695")
         logo_title_frame.grid(row=0, column=1, sticky="ne", padx=(10, 0), pady=10)
         
         # Logo section
@@ -107,14 +107,14 @@ class MaterialListGenerator(BaseGenerator):
                 logo_label = tk.Label(
                     logo_title_frame, 
                     image=self.logo_photo, 
-                    bg="#00A651",
+                    bg="#00A695",
                     relief="flat"
                 )
                 logo_label.pack(side="left", padx=(0, 15), pady=5)
         except Exception as e:
             print(f"Warning: Could not load logo - {e}")
             # Create placeholder for logo space
-            placeholder = tk.Frame(logo_title_frame, width=80, height=80, bg="#00A651")
+            placeholder = tk.Frame(logo_title_frame, width=80, height=80, bg="#00A695")
             placeholder.pack(side="left", padx=(0, 15), pady=5)
         
         # Title section
@@ -122,7 +122,7 @@ class MaterialListGenerator(BaseGenerator):
         title_label = tk.Label(
             logo_title_frame,
             text=title_text,
-            bg="#00A651",
+            bg="#00A695",
             fg="white",
             font=("Arial", 24, "bold"),
             anchor="e",
@@ -150,46 +150,48 @@ class MaterialListGenerator(BaseGenerator):
             relief="raised",
             bd=2
         )
-        info_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=5)
+        info_frame.grid(row=0, column=0, sticky="ew")
         
         # Configure grid weights for responsive layout
         for i in range(4):
             info_frame.grid_columnconfigure(i, weight=1)
         
         # Row 0: Customer/Company
-        self.create_info_field(info_frame, "Client:", 0, 0)
-        self.customer_entry = self.create_info_entry(info_frame, "", 0, 1)
         
-        # Row 1: Address
+
+        '''# Row 1: Address
         self.create_info_field(info_frame, "Address:", 0, 2)
         self.address_entry = self.create_info_entry(info_frame, "", 0, 3)
         
         # Row 2: Phone and Fax
         self.create_info_field(info_frame, "Phone Number:", 2, 0)
         self.phone_entry = self.create_info_entry(info_frame, "", 2, 1)
+
         
-        '''self.create_info_field(info_frame, "Fax:", 2, 2)
-        self.fax_entry = self.create_info_entry(info_frame, "", 2, 3)'''
+        
+        self.create_info_field(info_frame, "Fax:", 2, 2)
+        self.fax_entry = self.create_info_entry(info_frame, "", 2, 3)
         
         # Row 3: Incharge / Contact Person
-        self.create_info_field(info_frame, "Incharge:", 3, 0)
-        self.incharge_entry = self.create_info_entry(info_frame, "", 3, 1)
-        self.create_info_field(info_frame, "Contact  Number:", 3, 2)
-        self.contact_number_entry = self.create_info_entry(info_frame, "", 3, 3)
+        self.create_info_field(info_frame, "Incharge:", 2, 2)
+        self.incharge_entry = self.create_info_entry(info_frame, "", 2, 3)
+        #self.create_info_field(info_frame, "Contact  Number:", 3, 2)
+        #self.contact_number_entry = self.create_info_entry(info_frame, "", 3, 3)'''
         
         # Row 4: Customer PO Ref and Quotation
-        self.create_info_field(info_frame, "Customer PO Ref:", 4, 0)
-        self.po_ref_entry = self.create_info_entry(info_frame, "", 4, 1)
         
-        self.create_info_field(info_frame, "Quotation:", 4, 2)
-        self.quotation_entry = self.create_info_entry(info_frame, "", 4, 3)
-        
+
         # Row 5: Project
-        self.create_info_field(info_frame, "Project:", 5, 0)
-        self.project_entry = self.create_info_entry(info_frame, "", 5, 1)
-        self.create_info_field(info_frame, "Delivery Date:", 5, 2)
-        self.delivery_date = self.create_info_entry(info_frame, self.delivery_date_var.get(), 5, 3, textvariable=self.delivery_date_var)
-        
+        self.create_info_field(info_frame, "Project:", 0, 0)
+        self.project_entry = self.create_info_entry(info_frame, "", 0, 1)
+        self.create_info_field(info_frame, "Work Order No:", 0, 2)
+        self.po_ref_entry = self.create_info_entry(info_frame, "", 0, 3)
+        self.create_info_field(info_frame, "Client:", 1, 0)
+        self.customer_entry = self.create_info_entry(info_frame, "", 1, 1)
+        self.create_info_field(info_frame, "Delivery Date:", 1, 2)
+        self.delivery_date = self.create_info_entry(info_frame, self.delivery_date_var.get(), 1, 3, textvariable=self.delivery_date_var)
+
+
         return info_frame
 
     def create_info_field(self, parent, text, row, col, width=12):
@@ -211,10 +213,10 @@ class MaterialListGenerator(BaseGenerator):
             anchor="w",
             width=width
         )
-        label.grid(row=row, column=col, sticky="w", padx=3, pady=2)
+        label.grid(row=row, column=col, sticky="w", padx=1, pady=1)
         return label
 
-    def create_info_entry(self, parent, default_value="", row=0, col=0, textvariable=None, width=18):
+    def create_info_entry(self, parent, default_value="", row=0, col=0, textvariable=None, width=15):
         """
         Create a consistent entry field for material information.
         
@@ -239,7 +241,7 @@ class MaterialListGenerator(BaseGenerator):
         )
         if not textvariable and default_value:
             entry.insert(0, default_value)
-        entry.grid(row=row, column=col, sticky="ew", padx=3, pady=2)
+        entry.grid(row=row, column=col, sticky="ew", padx=1, pady=1)
         return entry
 
     def _on_mousewheel(self, event):
@@ -248,7 +250,7 @@ class MaterialListGenerator(BaseGenerator):
         self.get_treeview_columns()
     def get_treeview_columns(self):
         """Return columns specific to material lists"""
-        return ("Part Number", "Description", "Supplier", "Qty", "Unit Price", "Total Price", "Weight", "Total Weight")
+        return ("Part Number", "Description", "Supplier", "Qty", "Unit Price", "Weight")
     
     def format_item_for_tree(self, product):
         """Format product data for material list tree display"""
@@ -261,12 +263,9 @@ class MaterialListGenerator(BaseGenerator):
         return (
             product.get('Part Number', ''),
             product.get('Description', ''),
-            product.get('Supplier', ''),
             format_qty(qty),
             format_currency(unit_price, self.currency_unit.get()),   # ✅ with currency
-            format_currency(total_price, self.currency_unit.get()),
             format_weight(weight),
-            format_weight(total_weight)
         )
 
     def get_export_data(self):
@@ -309,22 +308,11 @@ class MaterialListGenerator(BaseGenerator):
             row_data = {
                 'Delivery Note Date': self.delivery_date.get().strip(),
                 'Customer': self.customer_entry.get().strip(),
-                'Address': self.address_entry.get().strip(),
-                'Phone': self.phone_entry.get().strip(),
-                'Incharge': self.incharge_entry.get().strip(),
                 'Customer PO Ref': self.po_ref_entry.get().strip(),
-                'Quotation': self.quotation_entry.get().strip(),
                 'Project': self.project_entry.get().strip(),
-                'Contact Number': self.contact_number_entry.get().strip(),
                 'Part Number': vals[0],
                 'Description': vals[1],
-                'Supplier': vals[2],
                 'Qty': qty,
-                'Unit Price': format_currency(price, self.currency_unit.get()),
-                'Total Price': format_currency(total_price, self.currency_unit.get()),
-                'Unit Weight (kg)': round(weight, 3),
-                'Total Weight (kg)': round(total_weight, 3),
-                'Notes': self.notes.get().strip()
             }
 
             data.append(row_data)
@@ -344,7 +332,7 @@ class MaterialListGenerator(BaseGenerator):
                 raise ValueError("No data to export. Please add items to the material list.")
 
             # ✅ Use default template path instead of asking
-            default_template = os.path.join(os.getcwd(), "assets", "material_list_template.docx")
+            default_template = os.path.join(os.getcwd(), "assets", "mrf_template.docx")
 
             if not os.path.exists(default_template):
                 raise FileNotFoundError(f"Default template not found:\n{default_template}")
@@ -354,14 +342,9 @@ class MaterialListGenerator(BaseGenerator):
             # Mapping of placeholders to actual values
             placeholders = {
                 "Customer": self.customer_entry.get().strip(),
-                "Address": self.address_entry.get().strip(),
-                "Phone_Num": self.phone_entry.get().strip(),
-                "Incharge": self.incharge_entry.get().strip(),
                 "Customer_PO": self.po_ref_entry.get().strip(),
-                "Quotation": self.quotation_entry.get().strip(),
+                "Date": self.delivery_date.get().strip(),
                 "Project_Name": self.project_entry.get().strip(),
-                "Contact_Num": self.contact_number_entry.get().strip(),
-                "Date": self.delivery_date.get().strip()
             }
 
             # Replace placeholders in document paragraphs, headers, footers
@@ -382,7 +365,8 @@ class MaterialListGenerator(BaseGenerator):
             # ✅ Auto-generate filename
             current_date = datetime.now().strftime("%d-%m-%y")
             client_name = self.customer_entry.get().strip() or "Client"
-            default_filename = f"DN0{current_date}-{client_name}.docx"
+            project_name = self.project_entry.get().strip() or "Project"
+            default_filename = f"MRF-{current_date}-{project_name}-{client_name}.docx"
 
             # ✅ Save automatically into "exports" folder (no dialog)
             export_folder = os.path.join(os.getcwd(), "exports")
@@ -412,7 +396,7 @@ class MaterialListGenerator(BaseGenerator):
         for table in doc.tables:
             if len(table.rows) > 0:
                 headers = [cell.text.strip().lower() for cell in table.rows[0].cells]
-                if 'no.' in headers and 'item' in headers and 'description' in headers:
+                if 'item' in headers and 'part number' in headers and 'description' in headers and 'qty' in headers:
                     item_table = table
                     break
 
@@ -431,12 +415,7 @@ class MaterialListGenerator(BaseGenerator):
                 row_cells[0].text = str(i)
                 row_cells[1].text = str(item['Part Number'])
                 row_cells[2].text = str(item['Description'])
-                row_cells[3].text = str(item['Supplier'])
-                row_cells[4].text = str(item['Qty'])
-                row_cells[5].text = str(item.get('Unit Price', 0))  # Already formatted with currency
-                row_cells[6].text = str(item.get('Total Price', 0))
-                row_cells[7].text = str(item.get('Unit Weight (kg)', '0'))
-                row_cells[8].text = str(item.get('Total Weight (kg)', '0'))
+                row_cells[3].text = str(item['Qty'])
 
     def get_column_width(self, col):
         """
@@ -449,14 +428,10 @@ class MaterialListGenerator(BaseGenerator):
             int: Column width in pixels
         """
         width_map = {
-            "Part Number": 100,
+            "Item": 2,
+            "Part Number": 50,
             "Description": 200,
-            "Qty": 60,
-            "Supplier": 120,
-            "Unit Price": 80,
-            "Total Price": 80,
-            "Weight": 80,
-            "Total Weight": 80
+            "Qty": 3,
         }
         return width_map.get(col, 100)
     
@@ -473,8 +448,9 @@ class MaterialListGenerator(BaseGenerator):
 
             # Step 2b: Export as PDF (create temporary PDF file)
             client_name = self.customer_entry.get().strip() or "Client"
+            project_name = self.project_entry.get().strip() or "Project"
             current_date = datetime.now().strftime("%d-%m-%y")
-            pdf_filename = f"DN0{current_date}-{client_name}.pdf"
+            pdf_filename = f"MRF-{current_date}-{project_name}-{client_name}.pdf"
             temp_dir = tempfile.gettempdir()
             pdf_path = os.path.join(temp_dir, pdf_filename)
 
@@ -491,12 +467,8 @@ class MaterialListGenerator(BaseGenerator):
             doc = Document(template_path)
             placeholders = {
                 "Customer": self.customer_entry.get().strip(),
-                "Address": self.address_entry.get().strip(),
-                "Incharge": self.incharge_entry.get().strip(),
                 "Customer_PO": self.po_ref_entry.get().strip(),
-                "Quotation": self.quotation_entry.get().strip(),
                 "Project_Name": self.project_entry.get().strip(),
-                "Contact_Num": self.contact_number_entry.get().strip(),
                 "Date": self.delivery_date.get().strip()
             }
             for paragraph in doc.paragraphs:
