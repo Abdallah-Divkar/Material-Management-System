@@ -93,56 +93,6 @@ class BaseGenerator(tk.Toplevel, ABC):
         
         # Control buttons
         self.create_control_buttons()
-    
-    '''
-    def create_title_section(self, left_frame_callback=None):
-        """
-        Create the title section - can be overridden by subclasses.
-        
-        Args:
-            left_frame_callback: Optional callback function to create custom left content
-        """
-        header_frame = tk.Frame(self.main_frame, bg="#00A651")
-        header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(5, 0))
-        
-        # Store reference for subclasses
-        self.header_frame = header_frame
-        
-        # Configure grid weights
-        header_frame.grid_columnconfigure(0, weight=1)
-        header_frame.grid_columnconfigure(1, weight=0)
-        
-        # Left side: Custom content or empty frame
-        if left_frame_callback:
-            self.left_content_frame = left_frame_callback(header_frame)
-        else:
-            self.left_content_frame = tk.Frame(header_frame, bg="#F0F0F0")
-            self.left_content_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        
-        # Right side: Logo + Title
-        self.create_default_logo_title_section(header_frame)
-
-    def create_default_logo_title_section(self, parent_frame):
-        """Create default logo and title section"""
-        logo_title_frame = tk.Frame(parent_frame, bg="#00A651")
-        logo_title_frame.grid(row=0, column=1, sticky="ne", padx=(10, 0))
-        
-        # Logo
-        try:
-            logo_path = os.path.join("assets", "mts_logo.png")
-            if os.path.exists(logo_path):
-                logo_image = Image.open(logo_path).resize((80, 80), Image.Resampling.LANCZOS)
-                self.logo_photo = ImageTk.PhotoImage(logo_image)
-                logo_label = tk.Label(logo_title_frame, image=self.logo_photo, bg="#00A651")
-                logo_label.pack(side="left", padx=(0, 10))
-        except Exception as e:
-            print(f"Error loading logo: {e}")
-
-        # Title
-        title_text = getattr(self, 'module_title', 'Generator')
-        title = tk.Label(logo_title_frame, text=title_text, bg="#00A651",
-                        fg="white", font=("Arial", 28, "bold"))
-        title.pack(side="left")'''
 
     def create_search_section(self):
         """Create the search/product selection section"""
@@ -369,8 +319,13 @@ class BaseGenerator(tk.Toplevel, ABC):
         elif hasattr(self, 'print_material_list_pdf'):
             ttk.Button(btn_frame, text="Print", command=self.print_material_list_pdf).grid(row=0, column=4, padx=10)
 
+        '''save_btn = tk.Button(btn_frame, text="Save Delivery Info", command=self.save_delivery_note)
+        save_btn.grid(row=0, column=5, sticky="w", padx=10, pady=5)
 
-        ttk.Button(btn_frame, text="Home", command=self.return_home).grid(row=0, column=5, padx=10)
+        load_btn = tk.Button(btn_frame, text="Load Delivery Info", command=self.load_all_delivery_notes())
+        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)'''
+
+        ttk.Button(btn_frame, text="Home", command=self.return_home).grid(row=0, column=7, padx=10)
 
         self.btn_frame = btn_frame
 

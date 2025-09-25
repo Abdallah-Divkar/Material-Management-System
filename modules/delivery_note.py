@@ -10,6 +10,7 @@ Last Modified: 2024
 """
 
 import tkinter as tk
+import pandas as pd
 from tkinter import ttk, messagebox
 from datetime import datetime
 import sys
@@ -30,8 +31,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.base_generator import BaseGenerator
 from common.utils import format_qty, format_price, format_weight
 
-#DELIVERY_INFO_FILE = "delivery_info.json"
-
 class DeliveryNoteGenerator(BaseGenerator):
     """
     Delivery Note Generator - for incoming material deliveries
@@ -45,6 +44,9 @@ class DeliveryNoteGenerator(BaseGenerator):
         # Set module-specific attributes before calling super().__init__
         self.module_title = "Delivery Note Generator"
         self.export_button_text = "Export Delivery Note"
+        self.DELIVERY_INFO_FILE = "./backup/client_info_cache.json"
+        self.EXCEL_BACKUP_FILE = "./backup/client_info_backup.xlsx"
+        
         #self.default_filename = f"delivery_note_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
         # Initialize parent class
@@ -56,6 +58,7 @@ class DeliveryNoteGenerator(BaseGenerator):
         #customer_entry = customer_entry.get()
         self.delivery_date_var = tk.StringVar(value=datetime.now().strftime("%d-%m-%y"))
         self.notes = tk.StringVar()
+        
         #self.default_filename = f"DN0{self.delivery_date_var.get()}-{self.customer_entry.get()}.xlsx"
 
         # Create the title section with delivery info callback
@@ -65,6 +68,17 @@ class DeliveryNoteGenerator(BaseGenerator):
 
         # Create custom widgets
         self.create_custom_widgets()
+
+    def create_custom_widgets(self):
+        """Create delivery note specific widgets."""
+        # This method ensures treeview columns are properly configured
+        self.get_treeview_columns()
+        save_btn = tk.Button(self.btn_frame, text="Save Delivery Info", command=self.save_delivery_note)
+        save_btn.grid(row=0, column=5, sticky="w", padx=10, pady=5)
+
+        load_btn = tk.Button(self.btn_frame, text="Load Delivery Info", command=self.load_all_delivery_notes)
+        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)
+
 
     def create_title_section(self, left_frame_callback=None):
         """
@@ -107,7 +121,7 @@ class DeliveryNoteGenerator(BaseGenerator):
         
         # Logo section
         try:
-            logo_path = os.path.join("assets", "mts_logo.png")
+            logo_path = os.path.join("assets", "images",  "mts_logo.png")
             if os.path.exists(logo_path):
                 from PIL import Image, ImageTk
                 logo_image = Image.open(logo_path).resize((80, 80), Image.Resampling.LANCZOS)
@@ -138,6 +152,7 @@ class DeliveryNoteGenerator(BaseGenerator):
         )
         title_label.pack(side="left", pady=5)
 
+    
     def create_delivery_info_inline(self, parent_frame):
         """
         Create compact delivery information section for the header
@@ -163,18 +178,28 @@ class DeliveryNoteGenerator(BaseGenerator):
         # Configure grid weights for responsive layout
         for i in range(4):
             info_frame.grid_columnconfigure(i, weight=1)
-        
+
+        self.create_info_field(info_frame, "Select Client:", 0, 0)
+        self.client_var = tk.StringVar()
+        self.client_dropdown = ttk.Combobox(info_frame, textvariable=self.client_var, width=20)
+        self.client_dropdown.grid(row=0, column=1, padx=5, pady=2)
+
+        # Populate with unique clients
+        self.client_dropdown['values'] = self.get_unique_customers()
+
+        # Bind selection to load first delivery note for this client
+        self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
         # Row 0: Customer/Company and Delivery Note Number / Ref
-        self.create_info_field(info_frame, "Client:", 0, 0)
-        self.customer_entry = self.create_info_entry(info_frame, "", 0, 1)
+        self.create_info_field(info_frame, "Client:", 1, 0)
+        self.customer_entry = self.create_info_entry(info_frame, "", 1, 1)
         
         #self.create_info_field(info_frame, "Delivery Note Number / Ref:", 0, 2)
         #self.delivery_ref_entry = self.create_info_entry(info_frame, "", 0, 3)
         
         # Row 1: Address
-        self.create_info_field(info_frame, "Address:", 0, 2)
-        self.address_entry = self.create_info_entry(info_frame, "", 0, 3)
-        
+        self.create_info_field(info_frame, "Address:", 1, 2)
+        self.address_entry = self.create_info_entry(info_frame, "", 1, 3)
+
         # Row 2: Phone and Fax
         self.create_info_field(info_frame, "Phone Number:", 2, 0)
         self.phone_entry = self.create_info_entry(info_frame, "", 2, 1)
@@ -202,6 +227,89 @@ class DeliveryNoteGenerator(BaseGenerator):
         self.delivery_date = self.create_info_entry(info_frame, self.delivery_date_var.get(), 5, 3, textvariable=self.delivery_date_var)
         
         return info_frame
+
+    def save_delivery_note(self, new_entry=None):
+        """
+        Save a new delivery note to JSON without overwriting existing notes.
+        """
+        if new_entry is None:
+            new_entry = {
+                "Customer": self.customer_entry.get().strip(),
+                "Address": self.address_entry.get().strip(),
+                "Phone": self.phone_entry.get().strip(),
+                "Fax": self.fax_entry.get().strip(),
+                "Incharge": self.incharge_entry.get().strip(),
+                "Customer PO Ref": self.po_ref_entry.get().strip(),
+                "Quotation": self.quotation_entry.get().strip(),
+                "Project": self.project_entry.get().strip(),
+                "Contact Number": self.contact_number_entry.get().strip(),
+                "Delivery Note Date": self.delivery_date.get().strip(),
+                "Notes": self.notes.get().strip()
+            }
+        filename = self.DELIVERY_INFO_FILE
+        # Load existing data first
+        all_data = load_from_json(filename)
+        
+        # Ensure it's a list
+        if not isinstance(all_data, list):
+            all_data = []
+
+        # Append the new entry
+        all_data.append(new_entry)
+
+        # Save everything back
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(all_data, f, indent=4, ensure_ascii=False)
+            messagebox.showinfo("Success", f"Saved delivery note for {new_entry.get('Customer','Unknown')}")
+            print(f"[DEBUG] Saved new delivery note for customer '{new_entry.get('Customer', '')}'")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save delivery note:\n{e}")
+            print(f"[DEBUG] Error saving JSON: {e}")
+
+        self.append_delivery_note_excel(new_entry)
+
+    def load_all_delivery_notes(self):
+        """
+        Load all delivery notes safely.
+        Ensures return is always a list.
+        """
+        filename = self.DELIVERY_INFO_FILE
+        data = load_from_json(filename)
+
+        if not data:
+            print(f"[DEBUG] No delivery notes found in {filename}. Returning empty list.")
+            return []
+
+        if not isinstance(data, list):
+            print(f"[DEBUG] Warning: Unexpected data format in {filename}. Resetting to [].")
+            return []
+
+        print(f"[DEBUG] Loaded {len(data)} delivery notes from {filename}.")
+        if len(data) > 0:
+            sample = data[0].get("Customer", "Unknown")
+            print(f"[DEBUG] Example entry - Customer: {sample}")
+        return data
+
+
+    def get_unique_customers(self):
+        """
+        Return a list of unique customers from saved delivery notes.
+        """
+        notes = self.load_all_delivery_notes()
+        customers = list({note.get('Customer', '') for note in notes})
+        print(f"[DEBUG] Unique customers: {customers}")
+        return customers
+
+
+    def get_notes_by_customer(self, customer):
+        """
+        Get all delivery notes for a specific customer.
+        """
+        notes = self.load_all_delivery_notes()
+        filtered = [note for note in notes if note.get('Customer', '') == customer]
+        print(f"[DEBUG] Found {len(filtered)} notes for customer '{customer}'")
+        return filtered
 
     def create_info_field(self, parent, text, row, col, width=15):
         """
@@ -253,78 +361,64 @@ class DeliveryNoteGenerator(BaseGenerator):
         entry.grid(row=row, column=col, sticky="ew", padx=0, pady=2)
         return entry
 
-    '''def save_delivery_info(self):
-        """Store current delivery info entries for reuse and persist to JSON file"""
-        self.saved_delivery_info = {
-            "Customer": self.customer_entry.get(),
-            "Delivery Ref": self.delivery_ref_entry.get(),
-            "Address": self.address_entry.get(),
-            "Phone": self.phone_entry.get(),
-            "Fax": self.fax_entry.get(),
-            "Incharge": self.incharge_entry.get(),
-            "Customer PO Ref": self.po_ref_entry.get(),
-            "Quotation": self.quotation_entry.get(),
-            "Project": self.project_entry.get(),
-            "Notes": self.notes.get()  # use StringVar
-        }
-
-        try:
-            with open(DELIVERY_INFO_FILE, "w") as f:
-                json.dump(self.saved_delivery_info, f, indent=4)
-        except Exception as e:
-            print(f"Error saving delivery info to file: {e}")
-
-    def load_delivery_info(self):
-        """Restore saved delivery info from JSON file into entries"""
-        if os.path.exists(DELIVERY_INFO_FILE):
-            try:
-                with open(DELIVERY_INFO_FILE, "r") as f:
-                    self.saved_delivery_info = json.load(f)
-            except Exception as e:
-                print(f"Error loading delivery info from file: {e}")
-                self.saved_delivery_info = {}
-        else:
-            self.saved_delivery_info = {}
-
-        if not self.saved_delivery_info:
-            return
-
+    def load_delivery_note_to_gui(self, note):
         self.customer_entry.delete(0, tk.END)
-        self.customer_entry.insert(0, self.saved_delivery_info.get("Customer", ""))
-
-        self.delivery_ref_entry.delete(0, tk.END)
-        self.delivery_ref_entry.insert(0, self.saved_delivery_info.get("Delivery Ref", ""))
+        self.customer_entry.insert(0, note.get("Customer", ""))
 
         self.address_entry.delete(0, tk.END)
-        self.address_entry.insert(0, self.saved_delivery_info.get("Address", ""))
+        self.address_entry.insert(0, note.get("Address", ""))
 
         self.phone_entry.delete(0, tk.END)
-        self.phone_entry.insert(0, self.saved_delivery_info.get("Phone", ""))
+        self.phone_entry.insert(0, note.get("Phone", ""))
 
         self.fax_entry.delete(0, tk.END)
-        self.fax_entry.insert(0, self.saved_delivery_info.get("Fax", ""))
+        self.fax_entry.insert(0, note.get("Fax", ""))
 
         self.incharge_entry.delete(0, tk.END)
-        self.incharge_entry.insert(0, self.saved_delivery_info.get("Incharge", ""))
+        self.incharge_entry.insert(0, note.get("Incharge", ""))
+
+        self.contact_number_entry.delete(0, tk.END)
+        self.contact_number_entry.insert(0, note.get("Contact Number", ""))
 
         self.po_ref_entry.delete(0, tk.END)
-        self.po_ref_entry.insert(0, self.saved_delivery_info.get("Customer PO Ref", ""))
+        self.po_ref_entry.insert(0, note.get("Customer PO Ref", ""))
 
         self.quotation_entry.delete(0, tk.END)
-        self.quotation_entry.insert(0, self.saved_delivery_info.get("Quotation", ""))
+        self.quotation_entry.insert(0, note.get("Quotation", ""))
 
         self.project_entry.delete(0, tk.END)
-        self.project_entry.insert(0, self.saved_delivery_info.get("Project", ""))
+        self.project_entry.insert(0, note.get("Project", ""))
 
-        self.notes.set(self.saved_delivery_info.get("Notes", ""))'''
+        self.delivery_date_var.set(note.get("Delivery Note Date", datetime.now().strftime("%d-%m-%y")))
+        self.notes.set(note.get("Notes", ""))
 
-    def create_custom_widgets(self):
-        """Create delivery note specific widgets."""
-        # This method ensures treeview columns are properly configured
-        self.get_treeview_columns()
-        
-        # Any additional custom widgets can be added here
-        # For example, additional buttons or fields specific to delivery notes
+    def on_client_selected(self, event):
+        selected_client = self.client_var.get()
+        notes = self.get_notes_by_customer(selected_client)
+        if notes:
+            # Load the first note for this client into the GUI
+            self.load_delivery_note_to_gui(notes[0])
+
+    def append_delivery_note_excel(self, new_entry):
+        """
+        Append a single delivery note to an Excel backup without overwriting previous entries.
+        """
+        backup_folder = os.path.join(os.getcwd(), "backup")
+        os.makedirs(backup_folder, exist_ok=True)
+        backup_path = os.path.join(backup_folder, self.EXCEL_BACKUP_FILE)
+
+        df_new = pd.DataFrame([new_entry])
+
+        try:
+            # If the backup file exists, append without headers
+            if os.path.exists(backup_path):
+                df_new.to_excel(backup_path, index=False, header=False, mode='a', engine='openpyxl')
+            else:
+                # Create a new Excel file with headers
+                df_new.to_excel(backup_path, index=False, engine='openpyxl')
+            print(f"[DEBUG] Appended delivery note to Excel backup: {backup_path}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to append Excel backup: {e}")
 
     def get_treeview_columns(self):
         """Return columns specific to delivery notes."""
@@ -360,50 +454,42 @@ class DeliveryNoteGenerator(BaseGenerator):
         """
         data = []
 
-        # Debug: check delivery info
+        # Fetch and validate main fields
         customer = self.customer_entry.get().strip()
-        print(f"[DEBUG] Customer entry: '{customer}'")
         if not customer:
             raise ValueError("Customer name is required")
 
         delivery_date = self.delivery_date.get().strip()
-        print(f"[DEBUG] Delivery date entry: '{delivery_date}'")
         if not delivery_date:
             raise ValueError("Delivery date is required")
 
-        # Debug: check treeview rows
         children = self.item_tree.get_children()
-        print(f"[DEBUG] Number of rows in treeview: {len(children)}")
         if not children:
             print("[DEBUG] No items found in treeview!")
             return []
 
-        # Process each item in the tree
         for idx, row in enumerate(children):
             vals = self.item_tree.item(row)['values']
-            print(f"[DEBUG] Row {idx} values: {vals} (types: {[type(v) for v in vals]})")
 
-            # Basic validation
+            # Skip rows missing essential info
             if not vals[0] or not vals[1]:
                 print(f"[DEBUG] Skipping row {idx}: missing Part Number or Description")
                 continue
 
+            # Parse numeric fields using utility functions
             try:
-                qty = int(str(vals[2]).split()[0])  # still "1 pcs"
-                price = parse_float_from_string(vals[4])  # "USD 108.09" -> 108.09
-                weight = parse_float_from_string(vals[5])  # "20.000 kg" -> 20.0
+                from common.utils import parse_qty_from_display, parse_price_from_display, parse_weight_from_display
+
+                qty = parse_qty_from_display(vals[2])
+                price = parse_price_from_display(vals[4])
+                weight = parse_weight_from_display(vals[5])
             except Exception as e:
                 print(f"[DEBUG] Skipping row {idx} due to parse error: {e}")
                 continue
 
-
-            total_price = qty * price
-            total_weight = qty * weight
-
             row_data = {
-                'Delivery Note Date': self.delivery_date.get().strip(),
-                'Customer': self.customer_entry.get().strip(),
-                #'Delivery Ref': self.delivery_ref_entry.get().strip(),
+                'Delivery Note Date': delivery_date,
+                'Customer': customer,
                 'Address': self.address_entry.get().strip(),
                 'Phone': self.phone_entry.get().strip(),
                 'Fax': self.fax_entry.get().strip(),
@@ -411,17 +497,18 @@ class DeliveryNoteGenerator(BaseGenerator):
                 'Customer PO Ref': self.po_ref_entry.get().strip(),
                 'Quotation': self.quotation_entry.get().strip(),
                 'Project': self.project_entry.get().strip(),
-                'Contact Number': self.contact_number_entry.get().strip(),  # <- added
+                'Contact Number': self.contact_number_entry.get().strip(),
                 'Part Number': vals[0],
                 'Description': vals[1],
                 'Supplier': vals[3],
                 'Qty': qty,
-                'Unit Price': price,
+                'Unit Price': round(price, 2),
                 'Unit Weight (kg)': round(weight, 3),
+                'Total Price': round(qty * price, 2),
+                'Total Weight (kg)': round(qty * weight, 3),
                 'Status': vals[6] if len(vals) > 6 else 'Pending',
                 'Notes': self.notes.get().strip()
             }
-
 
             data.append(row_data)
 
@@ -505,7 +592,7 @@ class DeliveryNoteGenerator(BaseGenerator):
                 raise ValueError("No data to export. Please add items to the delivery note.")
 
             # ✅ Use default template path instead of asking
-            default_template = os.path.join(os.getcwd(), "assets", "template.docx")
+            default_template = os.path.join(os.getcwd(), "assets", "templates", "template.docx")
 
             if not os.path.exists(default_template):
                 raise FileNotFoundError(f"Default template not found:\n{default_template}")
@@ -635,11 +722,14 @@ class DeliveryNoteGenerator(BaseGenerator):
             pdf_path = os.path.join(temp_dir, pdf_filename)
 
             # Ask user for Word template
-            from tkinter import filedialog as fd
-            template_path = fd.askopenfilename(
-                filetypes=[("Word Documents", "*.docx")],
-                title="Select Word Template"
-            )
+            # ✅ Use default template path instead of asking
+            default_template = os.path.join(os.getcwd(), "assets", "templates", "template.docx")
+
+            if not os.path.exists(default_template):
+                raise FileNotFoundError(f"Default template not found:\n{default_template}")
+
+            doc = Document(default_template)
+            template_path = default_template
             if not template_path:
                 return
 

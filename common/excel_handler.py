@@ -6,7 +6,7 @@ import os
 import json
 
 # Default file name - can be overridden
-DEFAULT_FILE_NAME = "Price_List.xlsx"
+DEFAULT_FILE_NAME = "./templates/Price_List.xlsx"
 CACHE_FILE = "product_cache.json"
 
 def get_products(file_path=None):

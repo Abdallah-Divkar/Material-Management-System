@@ -42,7 +42,7 @@ class HomePage(tk.Tk):
 
         # Logo
         try:
-            logo_path = os.path.join("assets", "mts_logo.png")
+            logo_path = os.path.join("assets", "images", "mts_logo.png")
             if os.path.exists(logo_path):
                 logo_image = Image.open(logo_path).resize((80, 80))
                 self.logo_photo = ImageTk.PhotoImage(logo_image)
@@ -123,7 +123,7 @@ class HomePage(tk.Tk):
 
         # Icon
         try:
-            icon_path = os.path.join("assets", module_config["icon"])
+            icon_path = os.path.join("assets", "images", module_config["icon"])
             if os.path.exists(icon_path):
                 img = Image.open(icon_path).resize((120, 120))
                 icon_photo = ImageTk.PhotoImage(img)

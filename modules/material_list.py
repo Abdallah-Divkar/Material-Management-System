@@ -22,6 +22,7 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx2pdf import convert
+import pandas as pd
 from common.utils import replace_placeholder_in_paragraph, save_to_json, load_from_json, parse_float_from_string
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,6 +43,8 @@ class MaterialListGenerator(BaseGenerator):
         """Initialize the Material List Generator with proper title configuration."""
         self.module_title = "Material List Generator"
         self.export_button_text = "Export Material List"
+        self.MATERIAL_INFO_FILE = "./backup/client_info_cache.json"
+        self.EXCEL_BACKUP_FILE = "./backup/client_info_backup.xlsx"
         #self.default_filename = f"material_list_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         # Initialize BaseGenerator and self.main_frame
@@ -99,7 +102,7 @@ class MaterialListGenerator(BaseGenerator):
         
         # Logo section
         try:
-            logo_path = os.path.join("assets", "mts_logo.png")
+            logo_path = os.path.join("assets", "images" "mts_logo.png")
             if os.path.exists(logo_path):
                 from PIL import Image, ImageTk
                 logo_image = Image.open(logo_path).resize((80, 80), Image.Resampling.LANCZOS)
@@ -155,42 +158,26 @@ class MaterialListGenerator(BaseGenerator):
         # Configure grid weights for responsive layout
         for i in range(4):
             info_frame.grid_columnconfigure(i, weight=1)
-        
-        # Row 0: Customer/Company
-        
 
-        '''# Row 1: Address
-        self.create_info_field(info_frame, "Address:", 0, 2)
-        self.address_entry = self.create_info_entry(info_frame, "", 0, 3)
-        
-        # Row 2: Phone and Fax
-        self.create_info_field(info_frame, "Phone Number:", 2, 0)
-        self.phone_entry = self.create_info_entry(info_frame, "", 2, 1)
+        self.create_info_field(info_frame, "Select Project:", 0, 0)
+        self.client_var = tk.StringVar()
+        self.client_dropdown = ttk.Combobox(info_frame, textvariable=self.client_var, width=20)
+        self.client_dropdown.grid(row=0, column=1, padx=5, pady=2)
 
-        
-        
-        self.create_info_field(info_frame, "Fax:", 2, 2)
-        self.fax_entry = self.create_info_entry(info_frame, "", 2, 3)
-        
-        # Row 3: Incharge / Contact Person
-        self.create_info_field(info_frame, "Incharge:", 2, 2)
-        self.incharge_entry = self.create_info_entry(info_frame, "", 2, 3)
-        #self.create_info_field(info_frame, "Contact  Number:", 3, 2)
-        #self.contact_number_entry = self.create_info_entry(info_frame, "", 3, 3)'''
-        
-        # Row 4: Customer PO Ref and Quotation
-        
+        # Populate with unique clients
+        self.client_dropdown['values'] = self.get_unique_customers()
 
-        # Row 5: Project
-        self.create_info_field(info_frame, "Project:", 0, 0)
-        self.project_entry = self.create_info_entry(info_frame, "", 0, 1)
-        self.create_info_field(info_frame, "Work Order No:", 0, 2)
-        self.po_ref_entry = self.create_info_entry(info_frame, "", 0, 3)
-        self.create_info_field(info_frame, "Client:", 1, 0)
-        self.customer_entry = self.create_info_entry(info_frame, "", 1, 1)
-        self.create_info_field(info_frame, "Delivery Date:", 1, 2)
-        self.delivery_date = self.create_info_entry(info_frame, self.delivery_date_var.get(), 1, 3, textvariable=self.delivery_date_var)
-
+        # Bind selection to load first dispatch note for this client
+        self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
+        
+        self.create_info_field(info_frame, "Project:", 1, 0)
+        self.project_entry = self.create_info_entry(info_frame, "", 1, 1)
+        self.create_info_field(info_frame, "Work Order No:", 1, 2)
+        self.po_ref_entry = self.create_info_entry(info_frame, "", 1, 3)
+        self.create_info_field(info_frame, "Client:", 2, 0)
+        self.incharge_entry = self.create_info_entry(info_frame, "", 2, 1)
+        self.create_info_field(info_frame, "Delivery Date:", 2, 2)
+        self.delivery_date = self.create_info_entry(info_frame, self.delivery_date_var.get(), 2, 3, textvariable=self.delivery_date_var)
 
         return info_frame
 
@@ -246,11 +233,151 @@ class MaterialListGenerator(BaseGenerator):
 
     def _on_mousewheel(self, event):
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+    
     def create_custom_widgets(self):
         self.get_treeview_columns()
+        save_btn = tk.Button(self.btn_frame, text="Save Material Release Form", command=self.save_material_list)
+        save_btn.grid(row=0, column=5, sticky="w", padx=10, pady=5)
+
+        load_btn = tk.Button(self.btn_frame, text="Load Material Release Form", command=self.load_all_material_lists)
+        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)
+
+    def save_material_list(self, new_entry=None):
+        """
+        Save a new material list to JSON without overwriting existing notes.
+        """
+        if new_entry is None:
+            new_entry = {
+                "Incharge": self.incharge_entry.get().strip(),
+                "Customer PO Ref": self.po_ref_entry.get().strip(),
+                "Project": self.project_entry.get().strip(),
+                "Delivery Note Date": self.delivery_date.get().strip(),
+                "Notes": self.notes.get().strip()
+            }
+        filename = self.MATERIAL_INFO_FILE
+        # Load existing data first
+        all_data = load_from_json(filename)
+        
+        # Ensure it's a list
+        if not isinstance(all_data, list):
+            all_data = []
+
+        # Append the new entry
+        all_data.append(new_entry)
+
+        # Save everything back
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(all_data, f, indent=4, ensure_ascii=False)
+            messagebox.showinfo("Success", f"Saved material list for {new_entry.get('Customer','Unknown')}")
+            print(f"[DEBUG] Saved new material list for customer '{new_entry.get('Customer', '')}'")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save material list:\n{e}")
+            print(f"[DEBUG] Error saving JSON: {e}")
+
+        self.append_material_list_excel(new_entry)
+
+    def load_all_material_lists(self):
+        """
+        Load all material lists safely.
+        Ensures return is always a list.
+        """
+        filename = self.MATERIAL_INFO_FILE
+        data = load_from_json(filename)
+
+        if not data:
+            print(f"[DEBUG] No material lists found in {filename}. Returning empty list.")
+            return []
+
+        if not isinstance(data, list):
+            print(f"[DEBUG] Warning: Unexpected data format in {filename}. Resetting to [].")
+            return []
+
+        print(f"[DEBUG] Loaded {len(data)} material lists from {filename}.")
+        if len(data) > 0:
+            sample = data[0].get("Customer", "Unknown")
+            print(f"[DEBUG] Example entry - Customer: {sample}")
+        return data
+
+    def get_unique_customers(self):
+        """
+        Return a list of unique customers from saved material lists.
+        """
+        notes = self.load_all_material_lists()
+        customers = list({note.get('Customer', '') for note in notes})
+        print(f"[DEBUG] Unique customers: {customers}")
+        return customers
+
+    def get_notes_by_customer(self, customer):
+        """
+        Get all material lists for a specific customer.
+        """
+        notes = self.load_all_material_lists()
+        filtered = [note for note in notes if note.get('Customer', '') == customer]
+        print(f"[DEBUG] Found {len(filtered)} notes for customer '{customer}'")
+        return filtered
+
+    def load_material_list_to_gui(self, note):
+        '''
+        self.address_entry.delete(0, tk.END)
+        self.address_entry.insert(0, note.get("Address", ""))
+
+        self.phone_entry.delete(0, tk.END)
+        self.phone_entry.insert(0, note.get("Phone", ""))
+
+        self.fax_entry.delete(0, tk.END)
+        self.fax_entry.insert(0, note.get("Fax", ""))'''
+
+        self.incharge_entry.delete(0, tk.END)
+        self.incharge_entry.insert(0, note.get("Incharge", ""))
+
+        '''self.contact_number_entry.delete(0, tk.END)
+        self.contact_number_entry.insert(0, note.get("Contact Number", ""))'''
+
+        self.po_ref_entry.delete(0, tk.END)
+        self.po_ref_entry.insert(0, note.get("Customer PO Ref", ""))
+
+        '''self.quotation_entry.delete(0, tk.END)
+        self.quotation_entry.insert(0, note.get("Quotation", ""))'''
+
+        self.project_entry.delete(0, tk.END)
+        self.project_entry.insert(0, note.get("Project", ""))
+
+        self.delivery_date_var.set(note.get("Delivery Note Date", datetime.now().strftime("%d-%m-%y")))
+        self.notes.set(note.get("Notes", ""))
+
+    def on_client_selected(self, event):
+        selected_client = self.client_var.get()
+        notes = self.get_notes_by_customer(selected_client)
+        if notes:
+            # Load the first note for this client into the GUI
+            self.load_material_list_to_gui(notes[0])
+
+    def append_material_list_excel(self, new_entry):
+        """
+        Append a single material list to an Excel backup without overwriting previous entries.
+        """
+        backup_folder = os.path.join(os.getcwd(), "backup")
+        os.makedirs(backup_folder, exist_ok=True)
+        backup_path = os.path.join(backup_folder, self.EXCEL_BACKUP_FILE)
+
+        df_new = pd.DataFrame([new_entry])
+
+        try:
+            # If the backup file exists, append without headers
+            if os.path.exists(backup_path):
+                df_new.to_excel(backup_path, index=False, header=False, mode='a', engine='openpyxl')
+            else:
+                # Create a new Excel file with headers
+                df_new.to_excel(backup_path, index=False, engine='openpyxl')
+            print(f"[DEBUG] Appended material list to Excel backup: {backup_path}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to append Excel backup: {e}")
+
+
     def get_treeview_columns(self):
         """Return columns specific to material lists"""
-        return ("Part Number", "Description", "Supplier", "Qty", "Unit Price", "Weight")
+        return ("Part Number", "Description", "Supplier", "Qty", "Unit Price", "Total Price", "Weight")
     
     def format_item_for_tree(self, product):
         """Format product data for material list tree display"""
@@ -263,8 +390,10 @@ class MaterialListGenerator(BaseGenerator):
         return (
             product.get('Part Number', ''),
             product.get('Description', ''),
+            product.get('Supplier', ''),
             format_qty(qty),
             format_currency(unit_price, self.currency_unit.get()),   # ✅ with currency
+            format_currency(total_price, self.currency_unit.get()),
             format_weight(weight),
         )
 
@@ -273,10 +402,10 @@ class MaterialListGenerator(BaseGenerator):
         data = []
         
         # Debug: check material info
-        customer = self.customer_entry.get().strip()
-        print(f"[DEBUG] Customer entry: '{customer}'")
-        if not customer:
-            raise ValueError("Customer name is required")
+        incharge = self.incharge_entry.get().strip()
+        print(f"[DEBUG] Incharge entry: '{incharge}'")
+        if not incharge:
+            raise ValueError("Incharge name is required")
 
         delivery_date = self.delivery_date.get().strip()
         print(f"[DEBUG] Delivery date entry: '{delivery_date}'")
@@ -307,7 +436,7 @@ class MaterialListGenerator(BaseGenerator):
 
             row_data = {
                 'Delivery Note Date': self.delivery_date.get().strip(),
-                'Customer': self.customer_entry.get().strip(),
+                'Incharge': self.incharge_entry.get().strip(),
                 'Customer PO Ref': self.po_ref_entry.get().strip(),
                 'Project': self.project_entry.get().strip(),
                 'Part Number': vals[0],
@@ -332,7 +461,7 @@ class MaterialListGenerator(BaseGenerator):
                 raise ValueError("No data to export. Please add items to the material list.")
 
             # ✅ Use default template path instead of asking
-            default_template = os.path.join(os.getcwd(), "assets", "mrf_template.docx")
+            default_template = os.path.join(os.getcwd(), "assets", "templates", "mrf_template.docx")
 
             if not os.path.exists(default_template):
                 raise FileNotFoundError(f"Default template not found:\n{default_template}")
@@ -341,7 +470,7 @@ class MaterialListGenerator(BaseGenerator):
 
             # Mapping of placeholders to actual values
             placeholders = {
-                "Customer": self.customer_entry.get().strip(),
+                "Incharge": self.incharge_entry.get().strip(),
                 "Customer_PO": self.po_ref_entry.get().strip(),
                 "Date": self.delivery_date.get().strip(),
                 "Project_Name": self.project_entry.get().strip(),
@@ -364,9 +493,9 @@ class MaterialListGenerator(BaseGenerator):
 
             # ✅ Auto-generate filename
             current_date = datetime.now().strftime("%d-%m-%y")
-            client_name = self.customer_entry.get().strip() or "Client"
+            incharge_name = self.incharge_entry.get().strip() or "Incharge"
             project_name = self.project_entry.get().strip() or "Project"
-            default_filename = f"MRF-{current_date}-{project_name}-{client_name}.docx"
+            default_filename = f"MRF-{current_date}-{project_name}-{incharge_name}.docx"
 
             # ✅ Save automatically into "exports" folder (no dialog)
             export_folder = os.path.join(os.getcwd(), "exports")
@@ -447,26 +576,32 @@ class MaterialListGenerator(BaseGenerator):
                 return
 
             # Step 2b: Export as PDF (create temporary PDF file)
-            client_name = self.customer_entry.get().strip() or "Client"
+            incharge_name = self.incharge_entry.get().strip() or "Incharge"
             project_name = self.project_entry.get().strip() or "Project"
             current_date = datetime.now().strftime("%d-%m-%y")
-            pdf_filename = f"MRF-{current_date}-{project_name}-{client_name}.pdf"
+            pdf_filename = f"MRF-{current_date}-{project_name}-{incharge_name}.pdf"
             temp_dir = tempfile.gettempdir()
             pdf_path = os.path.join(temp_dir, pdf_filename)
 
             # Ask user for Word template
             from tkinter import filedialog as fd
-            template_path = fd.askopenfilename(
-                filetypes=[("Word Documents", "*.docx")],
-                title="Select Word Template"
-            )
+
+            # ✅ Use default template path instead of asking
+            default_template = os.path.join(os.getcwd(), "assets", "templates", "mrf_template.docx")
+
+            if not os.path.exists(default_template):
+                raise FileNotFoundError(f"Default template not found:\n{default_template}")
+
+            doc = Document(default_template)
+
+            template_path = default_template
             if not template_path:
                 return
 
             # Fill template with placeholders
             doc = Document(template_path)
             placeholders = {
-                "Customer": self.customer_entry.get().strip(),
+                "Incharge": self.incharge_entry.get().strip(),
                 "Customer_PO": self.po_ref_entry.get().strip(),
                 "Project_Name": self.project_entry.get().strip(),
                 "Date": self.delivery_date.get().strip()

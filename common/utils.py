@@ -87,22 +87,39 @@ def replace_placeholder_in_paragraph(paragraph, placeholder, value):
             paragraph.runs[0].text = new_text
 
 def save_to_json(data, filename="delivery_cache.json"):
+    """
+    Save data to a JSON file with debugging output.
+    """
     try:
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
+        print(f"[DEBUG] Successfully saved {len(data)} records to '{filename}'")
         return True
     except Exception as e:
-        print(f"Error saving JSON: {e}")
+        print(f"[DEBUG] Error saving JSON to '{filename}': {e}")
         return False
 
+
 def load_from_json(filename="delivery_cache.json"):
-    if os.path.exists(filename):
-        try:
-            with open(filename, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading JSON: {e}")
-            return []
+    """
+    Load data from a JSON file with debugging output.
+    """
+    if not os.path.exists(filename):
+        print(f"[DEBUG] JSON file '{filename}' does not exist. Returning empty list.")
+        return []
+
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        print(f"[DEBUG] Successfully loaded {len(data)} records from '{filename}'")
+        return data
+    except json.JSONDecodeError as e:
+        print(f"[DEBUG] JSON decode error in file '{filename}': {e}")
+        return []
+    except Exception as e:
+        print(f"[DEBUG] Error loading JSON from '{filename}': {e}")
+        return []
+
         
 def parse_float_from_string(s):
     """
