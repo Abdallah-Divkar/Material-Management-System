@@ -623,7 +623,7 @@ class BaseGenerator(tk.Toplevel, ABC):
             self.remove_btn.config(state='disabled')
     
     def export_to_excel(self):
-        """Export items to Excel - uses get_export_data() from subclass with specific column widths"""
+        """Export items to Excel using get_export_data() with column names"""
         if not self.item_tree.get_children():
             messagebox.showinfo("No Data", "No items to export.")
             return
@@ -653,14 +653,21 @@ class BaseGenerator(tk.Toplevel, ABC):
                 if not confirm:
                     return
 
+            # Convert list of dicts to DataFrame
             df_new = pd.DataFrame(data)
+
+            # Ensure consistent column order as in treeview
+            tree_columns = list(self.item_tree["columns"])
+            df_new = df_new.reindex(columns=tree_columns)
+
+            # Export to Excel
             df_new.to_excel(file_path, index=False, engine='openpyxl')
 
             # Open workbook to set specific column widths
             wb = load_workbook(file_path)
             ws = wb.active
 
-            # Map of specific column widths
+            # Optional: set widths for known columns
             width_map = {
                 "Part Number": 20,
                 "Description": 40,
@@ -679,6 +686,8 @@ class BaseGenerator(tk.Toplevel, ABC):
 
         except Exception as e:
             messagebox.showerror("Export Failed", f"Could not save file:\n{e}")
+
+    
     def upload_file(self):
         """Upload product list file and cache it"""
         file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])

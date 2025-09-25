@@ -398,58 +398,22 @@ class MaterialListGenerator(BaseGenerator):
         )
 
     def get_export_data(self):
-        """Return data formatted for material list export"""
-        data = []
-        
-        # Debug: check material info
-        incharge = self.incharge_entry.get().strip()
-        print(f"[DEBUG] Incharge entry: '{incharge}'")
-        if not incharge:
-            raise ValueError("Incharge name is required")
+        """Return data formatted for export with column mapping by name"""
+        export_data = []
 
-        delivery_date = self.delivery_date.get().strip()
-        print(f"[DEBUG] Delivery date entry: '{delivery_date}'")
-        if not delivery_date:
-            raise ValueError("Delivery date is required")
+        # Get current columns from treeview
+        tree_columns = self.item_tree["columns"]
 
-        # Debug: check treeview rows
-        children = self.item_tree.get_children()
-        print(f"[DEBUG] Number of rows in treeview: {len(children)}")
-        if not children:
-            print("[DEBUG] No items found in treeview!")
-            return []
-        
-        # Process each item in the tree
-        for idx, row in enumerate(children):
-            vals = self.item_tree.item(row)['values']
+        for row_id in self.item_tree.get_children():
+            row = self.item_tree.item(row_id, "values")
 
-            try:
-                qty = int(str(vals[3]).split()[0])  # index 3 is Qty
-                price = parse_float_from_string(vals[4])  # index 4 is Unit Price
-                weight = parse_float_from_string(vals[6])  # index 6 is Weight
-            except Exception as e:
-                print(f"[DEBUG] Skipping row {idx} due to parse error: {e}")
-                continue
+            # Build dict mapping col_name -> value
+            row_dict = {col: row[idx] if idx < len(row) else "" for idx, col in enumerate(tree_columns)}
 
-            total_price = qty * price
-            total_weight = qty * weight
+            export_data.append(row_dict)
 
-            row_data = {
-                'Delivery Note Date': self.delivery_date.get().strip(),
-                'Incharge': self.incharge_entry.get().strip(),
-                'Customer PO Ref': self.po_ref_entry.get().strip(),
-                'Project': self.project_entry.get().strip(),
-                'Part Number': vals[0],
-                'Description': vals[1],
-                'Qty': qty,
-            }
+        return export_data
 
-            data.append(row_data)
-
-
-        print(f"[DEBUG] Total exportable rows: {len(data)}")
-        return data
-    
     def export_template(self):
         """
         Export material list template with required columns (uses default template).
