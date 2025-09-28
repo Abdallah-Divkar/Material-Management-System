@@ -92,8 +92,8 @@ class DeliveryNoteGenerator(BaseGenerator):
         header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(5, 0))
         
         # Configure column weights for responsive layout
-        header_frame.grid_columnconfigure(0, weight=1)  # Left side (delivery info)
-        header_frame.grid_columnconfigure(1, weight=0)  # Right side (logo + title)
+        header_frame.grid_columnconfigure(0, weight=1)
+        header_frame.grid_columnconfigure(1, weight=0)
         
         # Store header frame reference for child classes
         self.header_frame = header_frame
@@ -422,7 +422,7 @@ class DeliveryNoteGenerator(BaseGenerator):
 
     def get_treeview_columns(self):
         """Return columns specific to delivery notes."""
-        return ("Part Number", "Description", "Qty", "Supplier", "Unit Price", "Weight", "Status")
+        return ("Part Number", "Description", "Qty", "Supplier", "Unit Price", "Weight")
     
     def format_item_for_tree(self, product):
         """
@@ -444,8 +444,7 @@ class DeliveryNoteGenerator(BaseGenerator):
             qty,
             product.get('Supplier', ''),
             price,
-            weight,
-            "Pending"  # Default status for delivery
+            weight
         )
     
     def get_export_data(self):
@@ -506,7 +505,6 @@ class DeliveryNoteGenerator(BaseGenerator):
                 'Unit Weight (kg)': round(weight, 3),
                 'Total Price': round(qty * price, 2),
                 'Total Weight (kg)': round(qty * weight, 3),
-                'Status': vals[6] if len(vals) > 6 else 'Pending',
                 'Notes': self.notes.get().strip()
             }
 
@@ -514,72 +512,6 @@ class DeliveryNoteGenerator(BaseGenerator):
 
         print(f"[DEBUG] Total exportable rows: {len(data)}")
         return data
-
-    
-    '''def get_export_data(self):
-        """
-        Return data formatted for delivery note export.
-        
-        Returns:
-            list: List of dictionaries containing export data
-            
-        Raises:
-            ValueError: If required fields are missing
-        """
-        data = []
-        
-        # Validate delivery information
-        customer = self.customer_entry.get().strip()
-        if not customer:
-            raise ValueError("Customer name is required")
-        
-        delivery_date = self.delivery_date.get().strip()
-        if not delivery_date:
-            raise ValueError("Delivery date is required")
-        
-        # Process each item in the tree
-        for row in self.item_tree.get_children():
-            vals = self.item_tree.item(row)['values']
-            
-            # Basic validation
-            if not vals[0] or not vals[1]:  # Part Number and Description
-                continue
-            
-            try:
-                qty = int(vals[2].split()[0])  # Extract number from "5 pcs"
-                price = float(vals[4].split()[0])  # Extract number from "10.50 SAR"
-                weight = float(vals[5].split()[0])  # Extract number from "2.500 kg"
-            except (ValueError, IndexError):
-                continue
-            
-            # Calculate totals
-            total_price = qty * price
-            total_weight = qty * weight
-            
-            row_data = {
-                'Delivery Note Date': delivery_date,
-                'Customer': customer,
-                'Company': self.company_entry.get().strip(),
-                'Address': self.address_entry.get().strip(),
-                'Phone': self.phone_entry.get().strip(),
-                'Fax': self.fax_entry.get().strip(),
-                'Customer Number': self.customer_num_entry.get().strip(),
-                'Quotation ID': self.qid_entry.get().strip(),
-                'Project Name': self.project_entry.get().strip(),
-                'Part Number': vals[0],
-                'Description': vals[1],
-                'Supplier': vals[3],
-                'Qty': qty,
-                'Unit Price (SAR)': price,
-                'Total Price (SAR)': round(total_price, 2),
-                'Unit Weight (kg)': round(weight, 3),
-                'Total Weight (kg)': round(total_weight, 3),
-                'Status': vals[6] if len(vals) > 6 else 'Pending',
-                'Notes': self.notes.get().strip()
-            }
-            data.append(row_data)
-        
-        return data'''
     
     def export_template(self):
         """
@@ -698,8 +630,7 @@ class DeliveryNoteGenerator(BaseGenerator):
             "Qty": 60,
             "Supplier": 120,
             "Unit Price": 80,
-            "Weight": 80,
-            "Status": 80
+            "Weight": 80
         }
         return width_map.get(col, 100)
     
@@ -721,8 +652,6 @@ class DeliveryNoteGenerator(BaseGenerator):
             temp_dir = tempfile.gettempdir()
             pdf_path = os.path.join(temp_dir, pdf_filename)
 
-            # Ask user for Word template
-            # ✅ Use default template path instead of asking
             default_template = os.path.join(os.getcwd(), "assets", "templates", "template.docx")
 
             if not os.path.exists(default_template):

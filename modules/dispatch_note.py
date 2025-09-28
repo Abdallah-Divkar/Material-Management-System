@@ -84,7 +84,7 @@ class DispatchNoteGenerator(BaseGenerator):
         
         # Logo section
         try:
-            logo_path = os.path.join("assets", "mts_logo.png")
+            logo_path = os.path.join("assets", "images", "mts_logo.png")
             if os.path.exists(logo_path):
                 from PIL import Image, ImageTk
                 logo_image = Image.open(logo_path).resize((80, 80), Image.Resampling.LANCZOS)

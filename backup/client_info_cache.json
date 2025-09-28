@@ -159,5 +159,25 @@
         "Project": "Pressure",
         "Delivery Note Date": "25-09-25",
         "Notes": ""
+    },
+    {
+        "Customer": "STC",
+        "Address": "Sulaimaniyah",
+        "Phone": "05076989",
+        "Fax": "980804",
+        "Incharge": "Raaed",
+        "Customer PO Ref": "PO78643",
+        "Quotation": "QN54983",
+        "Project": "AHU Temperature",
+        "Contact Number": "057042992",
+        "Dispatch Note Date": "28-09-25",
+        "Notes": ""
+    },
+    {
+        "Incharge": "Hisham",
+        "Customer PO Ref": "PO78980",
+        "Project": "Pressure",
+        "Delivery Note Date": "28-09-25",
+        "Notes": ""
     }
 ]

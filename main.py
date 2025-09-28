@@ -87,7 +87,7 @@ class HomePage(tk.Tk):
         modules = [
             {"name": "Delivery Note", "description": "Generate delivery notes\nfor customer shipments", "command": self.open_delivery_note, "icon": "delivery.png"},
             {"name": "Dispatch Note", "description": "Generate dispatch notes\nfor outgoing materials", "command": self.open_dispatch_note, "icon": "dispatch.png"},
-            {"name": "Material List", "description": "Create and manage\nmaterial inventory lists", "command": self.open_material_list, "icon": "material.png"}
+            {"name": "Material Release Form", "description": "Create and manage\nmaterial inventory lists", "command": self.open_material_list, "icon": "material.png"}
         ]
 
         for i, module in enumerate(modules):

@@ -1,20 +1,23 @@
 [
     {
-        "Delivery Note Date": "25-09-25",
-        "Incharge": "Othaim",
-        "Customer PO Ref": "WO78798",
+        "Delivery Note Date": "28-09-25",
+        "Customer": "Depot",
+        "Address": "Makkah",
+        "Phone": "050677889",
+        "Fax": "989804",
+        "Incharge": "Hisham",
+        "Customer PO Ref": "PO78980",
+        "Quotation": "QN83983",
         "Project": "Pressure",
-        "Part Number": 4702040,
-        "Description": "PRV Pressure Sensor, Wet SPP110-250kPa",
-        "Qty": 1
-    },
-    {
-        "Delivery Note Date": "25-09-25",
-        "Incharge": "Othaim",
-        "Customer PO Ref": "WO78798",
-        "Project": "Pressure",
-        "Part Number": "E112-708",
-        "Description": "Solid Core Current Status (“go/no”) Switch, 0.5-200 Amp Range, Normally Open ",
-        "Qty": 1
+        "Contact Number": "057432992",
+        "Part Number": "MS51-7103-150",
+        "Description": "Cooling Coil Valve Actuator, Modulating 24Vac, 0-10 Vdc",
+        "Supplier": "SE.FD",
+        "Qty": 1,
+        "Unit Price": 308.3,
+        "Unit Weight (kg)": 1.5,
+        "Total Price": 308.3,
+        "Total Weight (kg)": 1.5,
+        "Notes": ""
     }
 ]
