@@ -86,6 +86,36 @@ def replace_placeholder_in_paragraph(paragraph, placeholder, value):
         if paragraph.runs:
             paragraph.runs[0].text = new_text
 
+def replace_placeholders_in_doc(doc, placeholders):
+        """
+        Replace placeholders in the entire document:
+        - paragraphs
+        - headers and footers
+        - table cells
+        """
+        # Replace in paragraphs
+        for paragraph in doc.paragraphs:
+            for key, value in placeholders.items():
+                replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
+
+        # Replace in tables (cells contain paragraphs)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        for key, value in placeholders.items():
+                            replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
+
+        # Replace in headers and footers
+        for section in doc.sections:
+            for header_paragraph in section.header.paragraphs:
+                for key, value in placeholders.items():
+                    replace_placeholder_in_paragraph(header_paragraph, f"{{{key}}}", value)
+            for footer_paragraph in section.footer.paragraphs:
+                for key, value in placeholders.items():
+                    replace_placeholder_in_paragraph(footer_paragraph, f"{{{key}}}", value)
+
+
 def save_to_json(data, filename="delivery_cache.json"):
     """
     Save data to a JSON file with debugging output.

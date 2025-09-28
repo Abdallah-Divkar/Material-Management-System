@@ -9,9 +9,10 @@ Version: 2.0
 Last Modified: 2024
 """
 
+from pydoc import doc
 import tkinter as tk
 import pandas as pd
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
 import sys
 import os
@@ -23,7 +24,7 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx2pdf import convert
-from common.utils import replace_placeholder_in_paragraph, save_to_json, load_from_json, parse_float_from_string
+from common.utils import replace_placeholder_in_paragraph, replace_placeholders_in_doc, replace_placeholders_in_doc, save_to_json, load_from_json, parse_float_from_string
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -59,10 +60,9 @@ class DeliveryNoteGenerator(BaseGenerator):
         self.delivery_date_var = tk.StringVar(value=datetime.now().strftime("%d-%m-%y"))
         self.notes = tk.StringVar()
         
-        #self.default_filename = f"DN0{self.delivery_date_var.get()}-{self.customer_entry.get()}.xlsx"
-
         # Create the title section with delivery info callback
         self.create_title_section(left_frame_callback=self.create_delivery_info_inline)
+        self.generate_delivery_note_number()
         #self.load_delivery_info()
 
 
@@ -152,7 +152,6 @@ class DeliveryNoteGenerator(BaseGenerator):
         )
         title_label.pack(side="left", pady=5)
 
-    
     def create_delivery_info_inline(self, parent_frame):
         """
         Create compact delivery information section for the header
@@ -181,34 +180,40 @@ class DeliveryNoteGenerator(BaseGenerator):
 
         self.create_info_field(info_frame, "Select Client:", 0, 0)
         self.client_var = tk.StringVar()
-        self.client_dropdown = ttk.Combobox(info_frame, textvariable=self.client_var, width=20)
-        self.client_dropdown.grid(row=0, column=1, padx=5, pady=2)
+        self.client_dropdown = ttk.Combobox(info_frame, textvariable=self.client_var, width=18)
+        self.client_dropdown.grid(row=0, column=1)
 
         # Populate with unique clients
         self.client_dropdown['values'] = self.get_unique_customers()
 
         # Bind selection to load first delivery note for this client
         self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
+
+        self.create_info_field(info_frame, "Delivery Note No.:", 0, 2)
+        self.delivery_no_var = tk.StringVar()
+        self.delivery_no_entry = self.create_info_entry(
+            info_frame, "", 0, 3, textvariable=self.delivery_no_var, width=18
+        )
+
         # Row 0: Customer/Company and Delivery Note Number / Ref
-        self.create_info_field(info_frame, "Client:", 1, 0)
+        self.create_info_field(info_frame, "Customer:", 1, 0)
         self.customer_entry = self.create_info_entry(info_frame, "", 1, 1)
         
         #self.create_info_field(info_frame, "Delivery Note Number / Ref:", 0, 2)
         #self.delivery_ref_entry = self.create_info_entry(info_frame, "", 0, 3)
         
+        self.create_info_field(info_frame, "Project:", 1, 2)
+        self.project_entry = self.create_info_entry(info_frame, "", 1, 3)
         # Row 1: Address
-        self.create_info_field(info_frame, "Address:", 1, 2)
-        self.address_entry = self.create_info_entry(info_frame, "", 1, 3)
+        self.create_info_field(info_frame, "Address:", 2, 0)
+        self.address_entry = self.create_info_entry(info_frame, "", 2, 1)
 
         # Row 2: Phone and Fax
-        self.create_info_field(info_frame, "Phone Number:", 2, 0)
-        self.phone_entry = self.create_info_entry(info_frame, "", 2, 1)
-        
-        self.create_info_field(info_frame, "Fax:", 2, 2)
-        self.fax_entry = self.create_info_entry(info_frame, "", 2, 3)
-        
-        # Row 3: Incharge / Contact Person
-        self.create_info_field(info_frame, "Incharge:", 3, 0)
+        self.create_info_field(info_frame, "Phone Number:", 2, 2)
+        self.phone_entry = self.create_info_entry(info_frame, "", 2, 3)
+
+        # Row 3: Attn. / Contact Person
+        self.create_info_field(info_frame, "Attn.:", 3, 0)
         self.incharge_entry = self.create_info_entry(info_frame, "", 3, 1)
         self.create_info_field(info_frame, "Contact  Number:", 3, 2)
         self.contact_number_entry = self.create_info_entry(info_frame, "", 3, 3)
@@ -219,10 +224,10 @@ class DeliveryNoteGenerator(BaseGenerator):
         
         self.create_info_field(info_frame, "Quotation:", 4, 2)
         self.quotation_entry = self.create_info_entry(info_frame, "", 4, 3)
-        
-        # Row 5: Project
-        self.create_info_field(info_frame, "Project:", 5, 0)
-        self.project_entry = self.create_info_entry(info_frame, "", 5, 1)
+
+        # Row 5: Subject
+        self.create_info_field(info_frame, "Subject:", 5, 0)
+        self.subject_entry = self.create_info_entry(info_frame, "", 5, 1)
         self.create_info_field(info_frame, "Delivery Date:", 5, 2)
         self.delivery_date = self.create_info_entry(info_frame, self.delivery_date_var.get(), 5, 3, textvariable=self.delivery_date_var)
         
@@ -234,14 +239,15 @@ class DeliveryNoteGenerator(BaseGenerator):
         """
         if new_entry is None:
             new_entry = {
+                "Delivery Note No.": self.delivery_no_var.get().strip(),
                 "Customer": self.customer_entry.get().strip(),
+                "Project": self.project_entry.get().strip(),
                 "Address": self.address_entry.get().strip(),
                 "Phone": self.phone_entry.get().strip(),
-                "Fax": self.fax_entry.get().strip(),
                 "Incharge": self.incharge_entry.get().strip(),
                 "Customer PO Ref": self.po_ref_entry.get().strip(),
                 "Quotation": self.quotation_entry.get().strip(),
-                "Project": self.project_entry.get().strip(),
+                "Subject": self.subject_entry.get().strip(),
                 "Contact Number": self.contact_number_entry.get().strip(),
                 "Delivery Note Date": self.delivery_date.get().strip(),
                 "Notes": self.notes.get().strip()
@@ -269,6 +275,15 @@ class DeliveryNoteGenerator(BaseGenerator):
 
         self.append_delivery_note_excel(new_entry)
 
+        # Update client/project cache
+        self.update_client_info_cache(
+            customer=new_entry["Customer"],
+            project=new_entry["Project"],
+            address=new_entry.get("Address", ""),
+            phone=new_entry.get("Phone", ""),
+            incharge=new_entry.get("Incharge", "")
+        )
+
     def load_all_delivery_notes(self):
         """
         Load all delivery notes safely.
@@ -291,16 +306,21 @@ class DeliveryNoteGenerator(BaseGenerator):
             print(f"[DEBUG] Example entry - Customer: {sample}")
         return data
 
-
-    def get_unique_customers(self):
+    def get_unique_customers(self, use_cache=False):
         """
         Return a list of unique customers from saved delivery notes.
         """
-        notes = self.load_all_delivery_notes()
-        customers = list({note.get('Customer', '') for note in notes})
-        print(f"[DEBUG] Unique customers: {customers}")
+        if use_cache:
+            cache_file = "./backup/client_info_cache.json"
+            data = load_from_json(cache_file)
+            if not data:
+                return []
+            customers = list({d.get('Customer', '') for d in data})
+        else:
+            notes = self.load_all_delivery_notes()
+            customers = list({note.get('Customer', '') for note in notes})
+            print(f"[DEBUG] Unique customers: {customers}")
         return customers
-
 
     def get_notes_by_customer(self, customer):
         """
@@ -362,42 +382,72 @@ class DeliveryNoteGenerator(BaseGenerator):
         return entry
 
     def load_delivery_note_to_gui(self, note):
-        self.customer_entry.delete(0, tk.END)
-        self.customer_entry.insert(0, note.get("Customer", ""))
-
-        self.address_entry.delete(0, tk.END)
-        self.address_entry.insert(0, note.get("Address", ""))
-
-        self.phone_entry.delete(0, tk.END)
-        self.phone_entry.insert(0, note.get("Phone", ""))
-
-        self.fax_entry.delete(0, tk.END)
-        self.fax_entry.insert(0, note.get("Fax", ""))
-
-        self.incharge_entry.delete(0, tk.END)
-        self.incharge_entry.insert(0, note.get("Incharge", ""))
-
-        self.contact_number_entry.delete(0, tk.END)
-        self.contact_number_entry.insert(0, note.get("Contact Number", ""))
-
-        self.po_ref_entry.delete(0, tk.END)
-        self.po_ref_entry.insert(0, note.get("Customer PO Ref", ""))
-
-        self.quotation_entry.delete(0, tk.END)
-        self.quotation_entry.insert(0, note.get("Quotation", ""))
-
-        self.project_entry.delete(0, tk.END)
-        self.project_entry.insert(0, note.get("Project", ""))
-
-        self.delivery_date_var.set(note.get("Delivery Note Date", datetime.now().strftime("%d-%m-%y")))
-        self.notes.set(note.get("Notes", ""))
+        mapping = {
+            "Customer": self.customer_entry,
+            "Project_Name": self.project_entry,
+            "Address": self.address_entry,
+            "Phone_Num": self.phone_entry,
+            "Incharge": self.incharge_entry,
+            "Contact_Num": self.contact_number_entry,
+            "Customer_PO": self.po_ref_entry,
+            "Quotation": self.quotation_entry,
+            "Subject": self.subject_entry,
+            "Date": self.delivery_date_var,
+            "Delivery_Note_No": self.delivery_no_var
+        }
+        for key, widget in mapping.items():
+            value = note.get(key, "")
+            if isinstance(widget, tk.Entry):
+                widget.delete(0, tk.END)
+                widget.insert(0, value)
+            elif isinstance(widget, tk.StringVar):
+                widget.set(value)
 
     def on_client_selected(self, event):
         selected_client = self.client_var.get()
-        notes = self.get_notes_by_customer(selected_client)
-        if notes:
-            # Load the first note for this client into the GUI
-            self.load_delivery_note_to_gui(notes[0])
+        data = load_from_json("./backup/client_info_cache.json")
+        project_info = next((d for d in data if d.get('Customer', '') == selected_client), None)
+        if project_info:
+            self.customer_entry.delete(0, tk.END)
+            self.customer_entry.insert(0, project_info.get("Customer", ""))
+            self.project_entry.delete(0, tk.END)
+            self.project_entry.insert(0, project_info.get("Project", ""))
+            self.address_entry.delete(0, tk.END)
+            self.address_entry.insert(0, project_info.get("Address", ""))
+            self.phone_entry.delete(0, tk.END)
+            self.phone_entry.insert(0, project_info.get("Phone", ""))
+            self.incharge_entry.delete(0, tk.END)
+            self.incharge_entry.insert(0, project_info.get("Incharge", ""))
+            self.contact_number_entry.delete(0, tk.END)
+            self.contact_number_entry.insert(0, project_info.get("Contact Number", ""))
+            self.po_ref_entry.delete(0, tk.END)
+            self.po_ref_entry.insert(0, project_info.get("Customer PO Ref", ""))
+            self.quotation_entry.delete(0, tk.END)
+            self.quotation_entry.insert(0, project_info.get("Quotation", ""))
+            self.subject_entry.delete(0, tk.END)
+            self.subject_entry.insert(0, project_info.get("Subject", ""))
+        else:
+            self.generate_delivery_note_number()
+
+
+    ''''def on_client_selected(self, event):
+        selected_client = self.client_var.get()
+        cache_file = "./backup/client_info_cache.json"
+        data = load_from_json(cache_file)
+        project_info = next((d for d in data if d.get('Customer', '') == selected_client), None)
+        if project_info:
+            self.customer_entry.delete(0, tk.END)
+            self.customer_entry.insert(0, project_info.get("Customer", ""))
+            self.project_entry.delete(0, tk.END)
+            self.project_entry.insert(0, project_info.get("Project", ""))
+            self.address_entry.delete(0, tk.END)
+            self.address_entry.insert(0, project_info.get("Address", ""))
+            self.phone_entry.delete(0, tk.END)
+            self.phone_entry.insert(0, project_info.get("Phone", ""))
+            self.incharge_entry.delete(0, tk.END)
+            self.incharge_entry.insert(0, project_info.get("Incharge", ""))
+        else:
+            self.generate_delivery_note_number()'''
 
     def append_delivery_note_excel(self, new_entry):
         """
@@ -447,6 +497,26 @@ class DeliveryNoteGenerator(BaseGenerator):
             weight
         )
     
+    def generate_delivery_note_number(self):
+        """
+        Generate a new delivery note number in the format DN{seq}-{MM}-{YY}.
+        Sequence resets every year.
+        """
+        all_notes = self.load_all_delivery_notes()
+        if not all_notes:
+            seq = 1
+        else:
+            last_dn = all_notes[-1].get("Delivery Note No.", "")
+            print(f"[DEBUG] Last delivery note number: {last_dn}")
+            try:
+                seq = int(last_dn[2:5]) + 1
+            except:
+                seq = len(all_notes) + 1
+        now = datetime.now()
+        dn_number = f"DN{seq:03d}-{now.strftime('%m-%y')}"
+        self.delivery_no_var.set(dn_number)
+        return dn_number
+ 
     def get_export_data(self):
         """
         Return data formatted for delivery note export.
@@ -487,15 +557,16 @@ class DeliveryNoteGenerator(BaseGenerator):
                 continue
 
             row_data = {
+                'Delivery Note No.': self.delivery_no_var.get().strip(),
                 'Delivery Note Date': delivery_date,
                 'Customer': customer,
+                'Project': self.project_entry.get().strip(),
                 'Address': self.address_entry.get().strip(),
                 'Phone': self.phone_entry.get().strip(),
-                'Fax': self.fax_entry.get().strip(),
-                'Incharge': self.incharge_entry.get().strip(),
+                'Attn.': self.incharge_entry.get().strip(),
                 'Customer PO Ref': self.po_ref_entry.get().strip(),
                 'Quotation': self.quotation_entry.get().strip(),
-                'Project': self.project_entry.get().strip(),
+                'Subject': self.subject_entry.get().strip(),
                 'Contact Number': self.contact_number_entry.get().strip(),
                 'Part Number': vals[0],
                 'Description': vals[1],
@@ -524,7 +595,7 @@ class DeliveryNoteGenerator(BaseGenerator):
                 raise ValueError("No data to export. Please add items to the delivery note.")
 
             # ✅ Use default template path instead of asking
-            default_template = os.path.join(os.getcwd(), "assets", "templates", "template.docx")
+            default_template = os.path.join(os.getcwd(), "assets", "templates", "delivery_note_template.docx")
 
             if not os.path.exists(default_template):
                 raise FileNotFoundError(f"Default template not found:\n{default_template}")
@@ -533,42 +604,41 @@ class DeliveryNoteGenerator(BaseGenerator):
 
             # Mapping of placeholders to actual values
             placeholders = {
+                "Delivery_Note_No": self.delivery_no_var.get().strip(),
                 "Customer": self.customer_entry.get().strip(),
+                "Project_Name": self.project_entry.get().strip(),
                 "Address": self.address_entry.get().strip(),
                 "Phone_Num": self.phone_entry.get().strip(),
-                "Fax": self.fax_entry.get().strip(),
                 "Incharge": self.incharge_entry.get().strip(),
                 "Customer_PO": self.po_ref_entry.get().strip(),
                 "Quotation": self.quotation_entry.get().strip(),
-                "Project_Name": self.project_entry.get().strip(),
+                "Subject": self.subject_entry.get().strip(),
                 "Contact_Num": self.contact_number_entry.get().strip(),
                 "Date": self.delivery_date.get().strip()
             }
 
-            # Replace placeholders in document paragraphs, headers, footers
-            for paragraph in doc.paragraphs:
-                for key, value in placeholders.items():
-                    replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
-            for section in doc.sections:
-                for header_paragraph in section.header.paragraphs:
-                    for key, value in placeholders.items():
-                        replace_placeholder_in_paragraph(header_paragraph, f"{{{key}}}", value)
-                for footer_paragraph in section.footer.paragraphs:
-                    for key, value in placeholders.items():
-                        replace_placeholder_in_paragraph(footer_paragraph, f"{{{key}}}", value)
+            # ✅ Replace in doc (paragraphs, headers, tables…)
+            replace_placeholders_in_doc(doc, placeholders)
 
-            # Populate item table
+            # ✅ Populate items
             self.populate_item_table(doc, export_data)
 
-            # ✅ Auto-generate filename
-            current_date = datetime.now().strftime("%d-%m-%y")
-            client_name = self.customer_entry.get().strip() or "Client"
-            default_filename = f"DN0{current_date}-{client_name}.docx"
+            delivery_no = self.delivery_no_var.get().strip() or "DN"
+            customer_name = self.customer_entry.get().strip() or "Customer"
+            customer_name = customer_name.replace(" ", "_")
+            default_filename = f"{delivery_no}-{customer_name}.docx"
 
-            # ✅ Save automatically into "exports" folder (no dialog)
-            export_folder = os.path.join(os.getcwd(), "exports")
+            export_folder = os.path.join(os.getcwd(), "assets", "exports")
             os.makedirs(export_folder, exist_ok=True)
-            save_path = os.path.join(export_folder, default_filename)
+
+            save_path = fd.asksaveasfilename(
+                initialdir=export_folder,
+                initialfile=default_filename,
+                defaultextension=".docx",
+                filetypes=[("Word Document", "*.docx")]
+            )
+            if not save_path:
+                return
 
             doc.save(save_path)
             save_to_json(export_data)
@@ -576,6 +646,67 @@ class DeliveryNoteGenerator(BaseGenerator):
 
         except Exception as e:
             messagebox.showerror("Export Failed", f"Failed to export delivery note:\n{str(e)}")
+    
+    def print_delivery_note_pdf(self):
+        """
+        Export delivery note as PDF and send to the system printer.
+        """
+        try:
+            # Step 2a: Export data
+            export_data = self.get_export_data()
+            if not export_data:
+                messagebox.showwarning("No Data", "No items to export.")
+                return
+
+            doc_number  = self.delivery_no_var.get().strip() or "DN"
+            pdf_filename = f"{doc_number}.pdf"
+            temp_dir = tempfile.gettempdir()
+            pdf_path = os.path.join(temp_dir, pdf_filename)
+
+
+            default_template = os.path.join(os.getcwd(), "assets", "templates", "delivery_note_template.docx")
+
+            if not os.path.exists(default_template):
+                raise FileNotFoundError(f"Default template not found:\n{default_template}")
+
+            # Fill template with placeholders
+            doc = Document(default_template)
+            placeholders = {
+                "Delivery_Note_No": self.delivery_no_var.get().strip(),
+                "Customer": self.customer_entry.get().strip(),
+                "Project_Name": self.project_entry.get().strip(),
+                "Address": self.address_entry.get().strip(),
+                "Phone_Num": self.phone_entry.get().strip(),
+                "Incharge": self.incharge_entry.get().strip(),
+                "Customer_PO": self.po_ref_entry.get().strip(),
+                "Quotation": self.quotation_entry.get().strip(),
+                "Subject": self.subject_entry.get().strip(),
+                "Contact_Num": self.contact_number_entry.get().strip(),
+                "Date": self.delivery_date.get().strip()
+            }
+            # ✅ Apply everywhere (paragraphs, headers, tables)
+            replace_placeholders_in_doc(doc, placeholders)
+
+            self.populate_item_table(doc, export_data)
+
+            temp_docx = os.path.join(temp_dir, "temp_delivery_note.docx")
+            doc.save(temp_docx)
+
+            # Convert to PDF
+            convert(temp_docx, pdf_path)
+
+            # Print
+            if os.name == "nt":  # Windows
+                os.startfile(pdf_path, "print")
+            elif sys.platform == "darwin":  # macOS
+                os.system(f"lp '{pdf_path}'")
+            else:  # Linux
+                os.system(f"lp '{pdf_path}'")
+
+            messagebox.showinfo("Success", "Delivery note sent to printer.")
+
+        except Exception as e:
+            messagebox.showerror("Print Failed", f"Failed to print delivery note:\n{e}")
 
     def populate_item_table(self, doc, export_data):
         """
@@ -634,74 +765,69 @@ class DeliveryNoteGenerator(BaseGenerator):
         }
         return width_map.get(col, 100)
     
-    def print_delivery_note_pdf(self):
+    def upload_file(self):
+        file_data = super().upload_file()
+        print(f"[DEBUG] Uploaded file data: {file_data}")
+        if file_data:
+            self.autofill_from_file_data(file_data)
+        else:
+            print("[DEBUG] No data extracted from uploaded file.")
+
+    def autofill_from_file_data(self, file_data, doc=None):
         """
-        Export delivery note as PDF and send to the system printer.
+        Autofill delivery info entries and TreeView using data from upload_file().
+        file_data should be a dict like: {"info": {...}, "items": [...]}
         """
-        try:
-            # Step 2a: Export data
-            export_data = self.get_export_data()
-            if not export_data:
-                messagebox.showwarning("No Data", "No items to export.")
-                return
+        if not file_data:
+            return
+        
+        info = file_data.get("info", {})
+        self.customer_entry.delete(0, tk.END)
+        self.customer_entry.insert(0, info.get("Customer", ""))
+        self.project_entry.delete(0, tk.END)
+        self.project_entry.insert(0, info.get("Project_Name", ""))
+        self.address_entry.delete(0, tk.END)
+        self.address_entry.insert(0, info.get("Address", ""))
+        self.phone_entry.delete(0, tk.END)
+        self.phone_entry.insert(0, info.get("Phone_Num", ""))
+        self.incharge_entry.delete(0, tk.END)
+        self.incharge_entry.insert(0, info.get("Incharge", ""))
+        self.contact_number_entry.delete(0, tk.END)
+        self.contact_number_entry.insert(0, info.get("Contact_Num", ""))
+        self.po_ref_entry.delete(0, tk.END)
+        self.po_ref_entry.insert(0, info.get("Customer_PO", ""))
+        self.quotation_entry.delete(0, tk.END)
+        self.quotation_entry.insert(0, info.get("Quotation", ""))
+        self.subject_entry.delete(0, tk.END)
+        self.subject_entry.insert(0, info.get("Subject", ""))
+        self.delivery_date_var.set(info.get("Date", datetime.now().strftime("%d-%m-%y")))
+        self.delivery_no_var.set(info.get("Delivery_Note_No", self.generate_delivery_note_number()))
 
-            # Step 2b: Export as PDF (create temporary PDF file)
-            client_name = self.customer_entry.get().strip() or "Client"
-            current_date = datetime.now().strftime("%d-%m-%y")
-            pdf_filename = f"DN0{current_date}-{client_name}.pdf"
-            temp_dir = tempfile.gettempdir()
-            pdf_path = os.path.join(temp_dir, pdf_filename)
+        self.item_tree.delete(*self.item_tree.get_children())
+        for row in file_data.get("items", []):
+            self.item_tree.insert("", "end", values=row)
+        
+        print("DEBUG: autofilling GUI with info:", file_data.get("info"))
+        print("DEBUG: items:", file_data.get("items"))
 
-            default_template = os.path.join(os.getcwd(), "assets", "templates", "template.docx")
 
-            if not os.path.exists(default_template):
-                raise FileNotFoundError(f"Default template not found:\n{default_template}")
+        '''if doc and doc.tables:
+            table = doc.tables[0]  # assuming first table has items
+            for row in table.rows[1:]:  # skip header
+                cells = [cell.text.strip() for cell in row.cells]
+                # Parse numeric fields if necessary
+                part_no = cells[1]
+                desc = cells[2]
+                qty = parse_float_from_string(cells[3])
+                self.item_tree.insert("", "end", values=(part_no, desc, qty))'''
 
-            doc = Document(default_template)
-            template_path = default_template
-            if not template_path:
-                return
+        messagebox.showinfo("Success", "Word document uploaded and GUI autofilled successfully.") 
 
-            # Fill template with placeholders
-            doc = Document(template_path)
-            placeholders = {
-                "Customer": self.customer_entry.get().strip(),
-                "Address": self.address_entry.get().strip(),
-                "Phone_Num": self.phone_entry.get().strip(),
-                "Fax": self.fax_entry.get().strip(),
-                "Incharge": self.incharge_entry.get().strip(),
-                "Customer_PO": self.po_ref_entry.get().strip(),
-                "Quotation": self.quotation_entry.get().strip(),
-                "Project_Name": self.project_entry.get().strip(),
-                "Contact_Num": self.contact_number_entry.get().strip(),
-                "Date": self.delivery_date.get().strip()
-            }
-            for paragraph in doc.paragraphs:
-                for key, value in placeholders.items():
-                    replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
-
-            self.populate_item_table(doc, export_data)
-
-            # Save temp Word file
-            temp_docx = os.path.join(temp_dir, "temp_delivery_note.docx")
-            doc.save(temp_docx)
-
-            # Convert Word to PDF
-            convert(temp_docx, pdf_path)
-
-            # Step 2c: Print the PDF using system default viewer
-            if os.name == "nt":  # Windows
-                os.startfile(pdf_path, "print")
-            elif sys.platform == "darwin":  # macOS
-                os.system(f"lp '{pdf_path}'")
-            else:  # Linux
-                os.system(f"lp '{pdf_path}'")
-
-            messagebox.showinfo("Success", f"Delivery note sent to printer.")
-
-        except Exception as e:
-            messagebox.showerror("Print Failed", f"Failed to print delivery note:\n{e}")
-
+# Test the module independently
+if __name__ == "__main__":
+    # Create a simple test window
+    root = tk.Tk()
+    root.withdraw()  # Hide root window
 
 # Test the module independently
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # common/base_generator.py
+import json
 import os
+from docx import Document
 import requests
 from dotenv import load_dotenv
 import tkinter as tk
@@ -11,8 +13,8 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
-from common.excel_handler import get_products, get_product_details
-from common.utils import format_qty, format_price, format_weight, format_currency
+from common.excel_handler import get_products, get_product_details, save_products_cache
+from common.utils import format_qty, format_price, format_weight, format_currency, load_from_json, parse_float_from_string
 from common.currency_handler import CurrencyHandler
 
 load_dotenv()
@@ -240,7 +242,6 @@ class BaseGenerator(tk.Toplevel, ABC):
         )
         self.clear_details_btn.pack(pady=5)
 
-
     def move_item_up(self):
         """Move selected item up in the treeview"""
         selected = self.item_tree.selection()
@@ -329,7 +330,84 @@ class BaseGenerator(tk.Toplevel, ABC):
 
         self.btn_frame = btn_frame
 
+    '''def update_client_info_cache(self, customer, project, address="", phone="", incharge=""):
+        cache_file = "./backup/client_info_cache.json"
+        data = load_from_json(cache_file)
+        if not isinstance(data, list):
+            data = []
+
+        # Avoid duplicate entries
+        if not any(d.get("Customer") == customer and d.get("Project") == project for d in data):
+            data.append({
+                "Customer": customer,
+                "Project": project,
+                "Address": address,
+                "Phone": phone,
+                "Incharge": incharge
+            })
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)'''
     
+    def update_client_info_cache(self,
+        delivery_no,
+        customer,
+        project="",
+        address="",
+        phone="",
+        incharge="",
+        contact_number="",
+        po_ref="",
+        quotation="",
+        subject="",
+        delivery_date=""):
+        """
+        Update the client info cache JSON with only template placeholders.
+        Avoids duplicates (same customer + project + delivery_no).
+
+        Args:
+            delivery_no (str): Delivery / Dispatch / Material release number
+            customer (str): Customer name
+            project (str): Project name
+            address (str): Address
+            phone (str): Phone number
+            incharge (str): Attn / Incharge
+            contact_number (str): Contact number
+            po_ref (str): Customer PO reference
+            quotation (str): Quotation reference
+            subject (str): Subject
+            delivery_date (str): Delivery date
+        """
+        cache_file = "./backup/client_info_cache.json"
+        data = load_from_json(cache_file)
+        if not isinstance(data, list):
+            data = []
+
+        # Avoid duplicate entries: match on customer + project + delivery_no
+        if not any(
+            d.get("Customer") == customer
+            and d.get("Project_Name") == project
+            and d.get("Delivery_No") == delivery_no
+            for d in data
+        ):
+            data.append({
+                "Customer": customer,
+                "Project_Name": project,
+                "Address": address,
+                "Phone_Num": phone,
+                "Incharge": incharge,
+                "Contact_Num": contact_number,
+                "Customer_PO": po_ref,
+                "Quotation": quotation,
+                "Subject": subject,
+                "Date": delivery_date,
+                "Delivery_No": delivery_no  # can be Delivery / Dispatch / Material release number
+            })
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+            print(f"[DEBUG] Updated client info cache for {customer} - {project}")
+
+
+
     # Abstract methods to be implemented by subclasses
     @abstractmethod
     def create_custom_widgets(self):
@@ -687,10 +765,146 @@ class BaseGenerator(tk.Toplevel, ABC):
         except Exception as e:
             messagebox.showerror("Export Failed", f"Could not save file:\n{e}")
 
-    
     def upload_file(self):
+        file_path = filedialog.askopenfilename(filetypes=[
+            ("Word Documents", "*.docx"),
+            ("Excel files", "*.xlsx *.xls")
+            ])
+        
+        if not file_path:
+            return None
+        
+        data = {"items": [], "info": {}}
+        if file_path.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_path)
+                self.products = df.to_dict(orient='records')
+                
+                # Save to cache
+                if save_products_cache(self.products):
+                    print("Products cached successfully")
+                
+                # Update display list
+                self.build_combo_display_list()
+                self.combo['values'] = self.combo_display_list
+                messagebox.showinfo("Success", "Product list uploaded and cached successfully.")
+                return data
+        elif file_path.endswith('.docx'):
+            doc = Document(file_path)
+            data = {"info": {}, "items": []}
+            if len(doc.tables) < 2:
+                messagebox.showerror("Error", "Word template must contain at least 2 tables (info + items).")
+                return None
+
+            # ----------------
+            # Parse Info Table
+            # ----------------
+            info_table = doc.tables[0]
+            try:
+                data["info"]["Customer"] = info_table.cell(0,0).text.strip()
+                data["info"]["Delivery_Note_No"] = info_table.cell(0,1).text.strip()
+                data["info"]["Project_Name"] = info_table.cell(1,0).text.strip()
+                data["info"]["Address"] = info_table.cell(2,0).text.strip()
+
+                data["info"]["Phone_Num"] = info_table.cell(3,0).text.strip()
+                data["info"]["Date"] = info_table.cell(3,1).text.replace("Date:", "").strip()
+
+                data["info"]["Incharge"] = info_table.cell(4,0).text.replace("Attn.:", "").strip()
+                data["info"]["Contact_Num"] = info_table.cell(5,0).text.replace("Mob", "").strip()
+                data["info"]["Customer_PO"] = info_table.cell(6,0).text.replace("Customer Po Ref:", "").strip()
+                data["info"]["Quotation"] = info_table.cell(7,0).text.replace("Our Quotation:", "").strip()
+                data["info"]["Subject"] = info_table.cell(9,0).text.replace("Subject:", "").strip()
+            except IndexError:
+                messagebox.showerror("Error", "Word info table format does not match expected template.")
+                return None
+
+            # ----------------
+            # Parse Items Table
+            # ----------------
+            items_table = doc.tables[1]
+            for row in items_table.rows[1:]:  # skip header
+                cells = [c.text.strip() for c in row.cells]
+                if len(cells) >= 4:
+                    item_code = cells[1]     # skip "No."
+                    desc = cells[2]
+                    qty = cells[3]
+                    data["items"].append([item_code, desc, qty])
+
+            return data
+        
+        return data
+
+    '''def upload_file(self):
         """Upload product list file and cache it"""
-        file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+        file_path = filedialog.askopenfilename(filetypes=[
+            ("Excel files", "*.xlsx *.xls"),
+            ("Word Documents", "*.docx")
+            ])
+        
+        if not file_path:
+            return
+        
+        try:
+            if file_path.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_path)
+                self.products = df.to_dict(orient='records')
+                
+                # Save to cache
+                from common.excel_handler import save_products_cache
+                if save_products_cache(self.products):
+                    print("Products cached successfully")
+                
+                # Update display list
+                self.build_combo_display_list()
+                self.combo['values'] = self.combo_display_list
+                messagebox.showinfo("Success", "Product list uploaded and cached successfully.")
+            elif file_path.endswith('.docx'):
+                doc = Document(file_path)
+
+                placeholders = {}
+                for paragraph in doc.paragraphs:
+                    text = paragraph.text
+                    if "Customer:" in text:
+                        placeholders["Customer"] = text.split("Customer:")[-1].strip()
+                    if "Project:" in text:
+                        placeholders["Project_Name"] = text.split("Project:")[-1].strip()
+                    if "Delivery Date:" in text:
+                        placeholders["Date"] = text.split("Delivery Date:")[-1].strip()
+
+                # Autofill delivery info section
+                if "Customer" in placeholders:
+                    self.customer_entry.delete(0, tk.END)
+                    self.customer_entry.insert(0, placeholders["Customer"])
+                if "Project_Name" in placeholders:
+                    self.project_entry.delete(0, tk.END)
+                    self.project_entry.insert(0, placeholders["Project_Name"])
+                if "Date" in placeholders:
+                    self.delivery_date.delete(0, tk.END)
+                    self.delivery_date.insert(0, placeholders["Date"])
+
+                # Optional: populate TreeView if the Word has a table
+                if doc.tables:
+                    table = doc.tables[0]  # assuming first table has items
+                    self.item_tree.delete(*self.item_tree.get_children())
+                    for row in table.rows[1:]:  # skip header
+                        cells = [cell.text.strip() for cell in row.cells]
+                        # Parse numeric fields if necessary
+                        part_no = cells[1]
+                        desc = cells[2]
+                        qty = parse_float_from_string(cells[3])
+                        #price = parse_float_from_string(cells[4])
+                        self.item_tree.insert("", "end", values=(part_no, desc, qty))
+
+                messagebox.showinfo("Success", "Word document uploaded and GUI autofilled successfully.")                
+        
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read file:\n{str(e)}")'''
+    
+    '''def upload_file(self):
+        """Upload product list file and cache it"""
+        file_path = filedialog.askopenfilename(filetypes=[
+            ("Excel files", "*.xlsx *.xls")
+            ("Word Documents", "*.docx"),
+            ])
         if file_path:
             try:
                 df = pd.read_excel(file_path)
@@ -707,7 +921,7 @@ class BaseGenerator(tk.Toplevel, ABC):
                 messagebox.showinfo("Success", "Product list uploaded and cached successfully.")
                 
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to read Excel file:\n{str(e)}")
+                messagebox.showerror("Error", f"Failed to read Excel file:\n{str(e)}")'''
     
     def on_double_click(self, event):
         """Handle double-click on treeview item to edit"""
