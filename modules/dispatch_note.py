@@ -9,14 +9,15 @@ from datetime import datetime
 import sys
 import os
 from datetime import datetime
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
+import tkinter.filedialog as fd
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx2pdf import convert
 import pandas as pd
-from common.utils import replace_placeholder_in_paragraph, save_to_json, load_from_json, parse_float_from_string
+from common.utils import replace_placeholder_in_paragraph, replace_placeholders_in_doc, save_to_json, load_from_json, parse_float_from_string
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,6 +42,7 @@ class DispatchNoteGenerator(BaseGenerator):
         self.notes = tk.StringVar()
 
         self.create_title_section(left_frame_callback=self.create_dispatch_info_inline)
+        self.generate_dispatch_note_number()
         self.create_custom_widgets()
         
 
@@ -151,24 +153,27 @@ class DispatchNoteGenerator(BaseGenerator):
 
         # Bind selection to load first dispatch note for this client
         self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
+
+        self.create_info_field(info_frame, "Dispatch Note No.:", 0, 2)
+        self.dispatch_no_var = tk.StringVar()
+        self.dispatch_no_entry = self.create_info_entry(
+            info_frame, "", 0, 3, textvariable=self.dispatch_no_var, width=18
+        )
         
         # Row 0: Customer/Company 
         self.create_info_field(info_frame, "Client:", 1, 0)
         self.customer_entry = self.create_info_entry(info_frame, "", 1, 1)
-        
-        # Row 1: Address
-        self.create_info_field(info_frame, "Dispatch Address:", 1, 2)
-        self.address_entry = self.create_info_entry(info_frame, "", 1, 3)
+        self.create_info_field(info_frame, "Project:", 1, 2)
+        self.project_entry = self.create_info_entry(info_frame, "", 1, 3)
 
-        # Row 2: Phone and Fax
-        self.create_info_field(info_frame, "Phone Number:", 2, 0)
-        self.phone_entry = self.create_info_entry(info_frame, "", 2, 1)
-        
-        self.create_info_field(info_frame, "Fax:", 2, 2)
-        self.fax_entry = self.create_info_entry(info_frame, "", 2, 3)
-        
-        # Row 3: Incharge / Contact Person
-        self.create_info_field(info_frame, "Incharge:", 3, 0)
+        self.create_info_field(info_frame, "Dispatch Address:", 2, 0)
+        self.address_entry = self.create_info_entry(info_frame, "", 2, 1)
+
+        # Row 2: Phone
+        self.create_info_field(info_frame, "Phone Number:", 2, 2)
+        self.phone_entry = self.create_info_entry(info_frame, "", 2, 3)
+        # Row 3: Attn. / Contact Person
+        self.create_info_field(info_frame, "Attn.:", 3, 0)
         self.incharge_entry = self.create_info_entry(info_frame, "", 3, 1)
         self.create_info_field(info_frame, "Contact  Number:", 3, 2)
         self.contact_number_entry = self.create_info_entry(info_frame, "", 3, 3)
@@ -180,9 +185,9 @@ class DispatchNoteGenerator(BaseGenerator):
         self.create_info_field(info_frame, "Quotation:", 4, 2)
         self.quotation_entry = self.create_info_entry(info_frame, "", 4, 3)
         
-        # Row 5: Project
-        self.create_info_field(info_frame, "Project:", 5, 0)
-        self.project_entry = self.create_info_entry(info_frame, "", 5, 1)
+        # Row 5: Subject and Dispatch Date
+        self.create_info_field(info_frame, "Subject:", 5, 0)
+        self.subject_entry = self.create_info_entry(info_frame, "", 5, 1)
         self.create_info_field(info_frame, "Dispatch Date:", 5, 2)
         self.dispatch_date = self.create_info_entry(info_frame, self.dispatch_date_var.get(), 5, 3, textvariable=self.dispatch_date_var)
         
@@ -241,11 +246,11 @@ class DispatchNoteGenerator(BaseGenerator):
     def create_custom_widgets(self):
         """Create dispatch note specific widgets"""
         self.get_treeview_columns()
-        save_btn = tk.Button(self.btn_frame, text="Save Dispatch Info", command=self.save_dispatch_note)
+        ''''save_btn = tk.Button(self.btn_frame, text="Save Dispatch Info", command=self.save_dispatch_note)
         save_btn.grid(row=0, column=5, sticky="w", padx=10, pady=5)
 
         load_btn = tk.Button(self.btn_frame, text="Load Dispatch Info", command=self.load_all_dispatch_notes)
-        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)
+        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)'''
 
     def save_dispatch_note(self, new_entry=None):
         """
@@ -253,14 +258,15 @@ class DispatchNoteGenerator(BaseGenerator):
         """
         if new_entry is None:
             new_entry = {
+                "Dispatch_Note_No": self.dispatch_no_var.get().strip(),
                 "Customer": self.customer_entry.get().strip(),
+                "Project": self.project_entry.get().strip(),
                 "Address": self.address_entry.get().strip(),
                 "Phone": self.phone_entry.get().strip(),
-                "Fax": self.fax_entry.get().strip(),
                 "Incharge": self.incharge_entry.get().strip(),
                 "Customer PO Ref": self.po_ref_entry.get().strip(),
                 "Quotation": self.quotation_entry.get().strip(),
-                "Project": self.project_entry.get().strip(),
+                "Subject": self.subject_entry.get().strip(),
                 "Contact Number": self.contact_number_entry.get().strip(),
                 "Dispatch Note Date": self.dispatch_date.get().strip(),
                 "Notes": self.notes.get().strip()
@@ -288,6 +294,19 @@ class DispatchNoteGenerator(BaseGenerator):
 
         self.append_dispatch_note_excel(new_entry)
 
+        # Update client/project cache
+        self.update_client_info_cache(
+            dispatch_no=new_entry["Dispatch_Note_No"],
+            customer=new_entry["Customer"],
+            project=new_entry["Project"],
+            address=new_entry.get("Address", ""),
+            phone=new_entry.get("Phone", ""),
+            incharge=new_entry.get("Incharge", ""),
+            contact_number=new_entry.get("Contact Number", ""),
+            po_ref=new_entry.get("Customer PO Ref", ""),
+            quotation=new_entry.get("Quotation", "")
+        )
+
     def load_all_dispatch_notes(self):
         """
         Load all dispatch notes safely.
@@ -310,13 +329,20 @@ class DispatchNoteGenerator(BaseGenerator):
             print(f"[DEBUG] Example entry - Customer: {sample}")
         return data
 
-    def get_unique_customers(self):
+    def get_unique_customers(self, use_cache=False):
         """
         Return a list of unique customers from saved dispatch notes.
         """
-        notes = self.load_all_dispatch_notes()
-        customers = list({note.get('Customer', '') for note in notes})
-        print(f"[DEBUG] Unique customers: {customers}")
+        if use_cache:
+            cache_file = "./backup/client_info_cache.json"
+            data = load_from_json(cache_file)
+            if not data:
+                return []
+            customers = list({d.get('Customer', '') for d in data})
+        else:
+            notes = self.load_all_dispatch_notes()
+            customers = list({note.get('Customer', '') for note in notes})
+            print(f"[DEBUG] Unique customers: {customers}")
         return customers
 
     def get_notes_by_customer(self, customer):
@@ -329,42 +355,52 @@ class DispatchNoteGenerator(BaseGenerator):
         return filtered
 
     def load_dispatch_note_to_gui(self, note):
-        self.customer_entry.delete(0, tk.END)
-        self.customer_entry.insert(0, note.get("Customer", ""))
-
-        self.address_entry.delete(0, tk.END)
-        self.address_entry.insert(0, note.get("Address", ""))
-
-        self.phone_entry.delete(0, tk.END)
-        self.phone_entry.insert(0, note.get("Phone", ""))
-
-        self.fax_entry.delete(0, tk.END)
-        self.fax_entry.insert(0, note.get("Fax", ""))
-
-        self.incharge_entry.delete(0, tk.END)
-        self.incharge_entry.insert(0, note.get("Incharge", ""))
-
-        self.contact_number_entry.delete(0, tk.END)
-        self.contact_number_entry.insert(0, note.get("Contact Number", ""))
-
-        self.po_ref_entry.delete(0, tk.END)
-        self.po_ref_entry.insert(0, note.get("Customer PO Ref", ""))
-
-        self.quotation_entry.delete(0, tk.END)
-        self.quotation_entry.insert(0, note.get("Quotation", ""))
-
-        self.project_entry.delete(0, tk.END)
-        self.project_entry.insert(0, note.get("Project", ""))
-
-        self.dispatch_date_var.set(note.get("Dispatch Note Date", datetime.now().strftime("%d-%m-%y")))
-        self.notes.set(note.get("Notes", ""))
+        mapping = {
+            "Customer": self.customer_entry,
+            "Project_Name": self.project_entry,
+            "Dispatch Address": self.address_entry,
+            "Phone_Num": self.phone_entry,
+            "Attn.": self.incharge_entry,
+            "Contact_Num": self.contact_number_entry,
+            "Customer_PO": self.po_ref_entry,
+            "Quotation": self.quotation_entry,
+            "Subject": self.subject_entry,
+            "Date": self.delivery_date_var,
+            "Dispatch_Note_No": self.dispatch_no_var
+        }
+        for key, widget in mapping.items():
+            value = note.get(key, "")
+            if isinstance(widget, tk.Entry):
+                widget.delete(0, tk.END)
+                widget.insert(0, value)
+            elif isinstance(widget, tk.StringVar):
+                widget.set(value)
 
     def on_client_selected(self, event):
         selected_client = self.client_var.get()
-        notes = self.get_notes_by_customer(selected_client)
-        if notes:
-            # Load the first note for this client into the GUI
-            self.load_dispatch_note_to_gui(notes[0])
+        data = load_from_json("./backup/client_info_cache.json")
+        project_info = next((d for d in data if d.get('Customer', '') == selected_client), None)
+        if project_info:
+            self.customer_entry.delete(0, tk.END)
+            self.customer_entry.insert(0, project_info.get("Customer", ""))
+            self.project_entry.delete(0, tk.END)
+            self.project_entry.insert(0, project_info.get("Project", ""))
+            self.address_entry.delete(0, tk.END)
+            self.address_entry.insert(0, project_info.get("Dispatch Address", ""))
+            self.phone_entry.delete(0, tk.END)
+            self.phone_entry.insert(0, project_info.get("Phone", ""))
+            self.incharge_entry.delete(0, tk.END)
+            self.incharge_entry.insert(0, project_info.get("Attn.", ""))
+            self.contact_number_entry.delete(0, tk.END)
+            self.contact_number_entry.insert(0, project_info.get("Contact Number", ""))
+            self.po_ref_entry.delete(0, tk.END)
+            self.po_ref_entry.insert(0, project_info.get("Customer PO Ref", ""))
+            self.quotation_entry.delete(0, tk.END)
+            self.quotation_entry.insert(0, project_info.get("Quotation", ""))
+            self.subject_entry.delete(0, tk.END)
+            self.subject_entry.insert(0, project_info.get("Subject", ""))
+        else:
+            self.generate_dispatch_note_number()
 
     def append_dispatch_note_excel(self, new_entry):
         """
@@ -387,7 +423,26 @@ class DispatchNoteGenerator(BaseGenerator):
         except Exception as e:
             print(f"[DEBUG] Failed to append Excel backup: {e}")
 
-
+    def generate_dispatch_note_number(self):
+            """
+            Generate a new dispatch note number in the format DN{seq}-{MM}-{YY}.
+            Sequence resets every year.
+            """
+            all_notes = self.load_all_dispatch_notes()
+            if not all_notes:
+                seq = 1
+            else:
+                last_dn = all_notes[-1].get("Dispatch Note No.", "")
+                print(f"[DEBUG] Last dispatch note number: {last_dn}")
+                try:
+                    seq = int(last_dn[2:5]) + 1
+                except:
+                    seq = len(all_notes) + 1
+            now = datetime.now()
+            dn_number = f"DN{seq:03d}-{now.strftime('%m-%y')}"
+            self.dispatch_no_var.set(dn_number)
+            return dn_number
+ 
     def get_treeview_columns(self):
         """Return columns specific to dispatch notes"""
         return ("Part Number", "Description", "Qty", "Unit Price", "Weight")
@@ -455,37 +510,27 @@ class DispatchNoteGenerator(BaseGenerator):
 
             total_price = qty * price
             total_weight = qty * weight
-            
-            '''row_data = {
-                'Dispatch Date': dispatch_date,
-                'Dispatch To': dispatch_to,
-                'Destination': self.destination.get(),
-                'Transport Method': self.transport_method.get(),
-                'Priority': self.priority.get(),
-                'Tracking Number': self.tracking_number.get(),
-                'Dispatched By': self.dispatched_by.get(),
-                'Overall Status': self.dispatch_status.get(),
-                'Part Number': vals[0],
-                'Description': vals[1],
-                'Qty': qty,
-                'Unit Price (SAR)': unit_price,
-                'Total Value (SAR)': total_value,
-                'Unit Weight (kg)': round(weight, 3),
-                'Total Weight (kg)': round(total_weight, 3),
-                'Item Status': vals[6] if len(vals) > 6 else 'Ready',
-                'Item Notes': vals[7] if len(vals) > 7 else '',
-                'Special Instructions': self.special_instructions.get()
-            }'''
 
             row_data = {
+                'Dispatch Note No': self.dispatch_no_var.get().strip(),
+                'Dispatch Date': dispatch_date,
+                'Customer': customer,
+                'Project': self.project_entry.get().strip(),
+                'Address': self.address_entry.get().strip(),
+                'Phone': self.phone_entry.get().strip(),
+                'Attn.': self.incharge_entry.get().strip(),
+                'Contact Number': self.contact_number_entry.get().strip(),
+                'Customer PO Ref': self.po_ref_entry.get().strip(),
+                'Quotation': self.quotation_entry.get().strip(),
+                'Subject': self.subject_entry.get().strip(),
                 'Part Number': vals[0],
                 'Description': vals[1],
                 'Qty': qty,
                 'Unit Price (SAR)': price,
                 'Unit Weight (kg)': round(weight, 3),
                 'Total Weight (kg)': round(total_weight, 3),
-                'Item Status': vals[6] if len(vals) > 6 else 'Ready',
-            }
+                'Total Price (SAR)': round(total_price, 2)
+                }
             data.append(row_data)
         
         print(f"[DEBUG] Total exportable rows: {len(data)}")
@@ -511,50 +556,52 @@ class DispatchNoteGenerator(BaseGenerator):
 
             # Mapping of placeholders to actual values
             placeholders = {
+                "Dispatch_Note_No": self.dispatch_no_var.get().strip(),
                 "Customer": self.customer_entry.get().strip(),
+                "Project_Name": self.project_entry.get().strip(),
                 "Address": self.address_entry.get().strip(),
                 "Phone_Num": self.phone_entry.get().strip(),
-                "Fax": self.fax_entry.get().strip(),
                 "Incharge": self.incharge_entry.get().strip(),
                 "Customer_PO": self.po_ref_entry.get().strip(),
                 "Quotation": self.quotation_entry.get().strip(),
-                "Project_Name": self.project_entry.get().strip(),
+                "Subject": self.subject_entry.get().strip(),
                 "Contact_Num": self.contact_number_entry.get().strip(),
                 "Date": self.dispatch_date.get().strip()
             }
 
-            # Replace placeholders in document paragraphs, headers, footers
-            for paragraph in doc.paragraphs:
-                for key, value in placeholders.items():
-                    replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
-            for section in doc.sections:
-                for header_paragraph in section.header.paragraphs:
-                    for key, value in placeholders.items():
-                        replace_placeholder_in_paragraph(header_paragraph, f"{{{key}}}", value)
-                for footer_paragraph in section.footer.paragraphs:
-                    for key, value in placeholders.items():
-                        replace_placeholder_in_paragraph(footer_paragraph, f"{{{key}}}", value)
+            # ✅ Replace in doc (paragraphs, headers, tables…)
+            replace_placeholders_in_doc(doc, placeholders)
 
-            # Populate item table
+            # ✅ Populate items
             self.populate_item_table(doc, export_data)
 
-            # ✅ Auto-generate filename
-            current_date = datetime.now().strftime("%d-%m-%y")
-            client_name = self.customer_entry.get().strip() or "Client"
-            default_filename = f"DN0{current_date}-{client_name}.docx"
+            dispatch_no = self.dispatch_no_var.get().strip() or "DN"
+            customer_name = self.customer_entry.get().strip() or "Customer"
+            customer_name = customer_name.replace(" ", "_")
+            default_filename = f"{dispatch_no}-{customer_name}.docx"
 
-            # ✅ Save automatically into "exports" folder (no dialog)
-            export_folder = os.path.join(os.getcwd(), "exports")
+            export_folder = os.path.join(os.getcwd(), "assets", "exports")
             os.makedirs(export_folder, exist_ok=True)
-            save_path = os.path.join(export_folder, default_filename)
+
+            save_path = fd.asksaveasfilename(
+                initialdir=export_folder,
+                initialfile=default_filename,
+                defaultextension=".docx",
+                filetypes=[("Word Document", "*.docx")]
+            )
+            if not save_path:
+                return
 
             doc.save(save_path)
             save_to_json(export_data)
             messagebox.showinfo("Success", f"Dispatch note exported successfully:\n{save_path}")
 
+            self.save_dispatch_note()  # Save current dispatch info
+            print(f"[DEBUG] Dispatch info saved after export")
+
         except Exception as e:
             messagebox.showerror("Export Failed", f"Failed to export dispatch note:\n{str(e)}")
-
+    
     def populate_item_table(self, doc, export_data):
         """
         Populate the item table in the Word document.
@@ -615,9 +662,9 @@ class DispatchNoteGenerator(BaseGenerator):
                 return
 
             # Step 2b: Export as PDF (create temporary PDF file)
+            doc_number = self.dispatch_no_var.get().strip() or "DN"
             client_name = self.customer_entry.get().strip() or "Client"
-            current_date = datetime.now().strftime("%d-%m-%y")
-            pdf_filename = f"DN0{current_date}-{client_name}.pdf"
+            pdf_filename = f"{doc_number}-{client_name}.pdf"
             temp_dir = tempfile.gettempdir()
             pdf_path = os.path.join(temp_dir, pdf_filename)
 
@@ -635,31 +682,30 @@ class DispatchNoteGenerator(BaseGenerator):
             # Fill template with placeholders
             doc = Document(template_path)
             placeholders = {
+                "Dispatch_Note_No": self.dispatch_no_var.get().strip(),
                 "Customer": self.customer_entry.get().strip(),
+                "Project_Name": self.project_entry.get().strip(),
                 "Address": self.address_entry.get().strip(),
                 "Phone_Num": self.phone_entry.get().strip(),
-                "Fax": self.fax_entry.get().strip(),
                 "Incharge": self.incharge_entry.get().strip(),
                 "Customer_PO": self.po_ref_entry.get().strip(),
                 "Quotation": self.quotation_entry.get().strip(),
-                "Project_Name": self.project_entry.get().strip(),
+                "Subject": self.subject_entry.get().strip(),
                 "Contact_Num": self.contact_number_entry.get().strip(),
                 "Date": self.dispatch_date.get().strip()
             }
-            for paragraph in doc.paragraphs:
-                for key, value in placeholders.items():
-                    replace_placeholder_in_paragraph(paragraph, f"{{{key}}}", value)
+            # ✅ Apply everywhere (paragraphs, headers, tables)
+            replace_placeholders_in_doc(doc, placeholders)
 
             self.populate_item_table(doc, export_data)
 
-            # Save temp Word file
             temp_docx = os.path.join(temp_dir, "temp_dispatch_note.docx")
             doc.save(temp_docx)
 
-            # Convert Word to PDF
+            # Convert to PDF
             convert(temp_docx, pdf_path)
 
-            # Step 2c: Print the PDF using system default viewer
+            # Print
             if os.name == "nt":  # Windows
                 os.startfile(pdf_path, "print")
             elif sys.platform == "darwin":  # macOS
@@ -667,12 +713,10 @@ class DispatchNoteGenerator(BaseGenerator):
             else:  # Linux
                 os.system(f"lp '{pdf_path}'")
 
-            messagebox.showinfo("Success", f"Dispatch note sent to printer.")
+            messagebox.showinfo("Success", "Dispatch note sent to printer.")
 
         except Exception as e:
             messagebox.showerror("Print Failed", f"Failed to print dispatch note:\n{e}")
-
-
 
     def on_double_click(self, event):
         """Override to allow editing Notes and Status columns"""
@@ -736,6 +780,53 @@ class DispatchNoteGenerator(BaseGenerator):
         widget.bind('<Return>', on_enter)
         widget.bind('<Escape>', lambda e: widget.destroy())
         widget.focus_set()
+
+    def upload_file(self):
+        file_data = super().upload_file()
+        print(f"[DEBUG] Uploaded file data: {file_data}")
+        if file_data:
+            self.autofill_from_file_data(file_data)
+        else:
+            print("[DEBUG] No data extracted from uploaded file.")
+
+    def autofill_from_file_data(self, file_data, doc=None):
+        """
+        Autofill delivery info entries and TreeView using data from upload_file().
+        file_data should be a dict like: {"info": {...}, "items": [...]}
+        """
+        if not file_data:
+            return
+        
+        info = file_data.get("info", {})
+        self.customer_entry.delete(0, tk.END)
+        self.customer_entry.insert(0, info.get("Customer", ""))
+        self.project_entry.delete(0, tk.END)
+        self.project_entry.insert(0, info.get("Project_Name", ""))
+        self.address_entry.delete(0, tk.END)
+        self.address_entry.insert(0, info.get("Address", ""))
+        self.phone_entry.delete(0, tk.END)
+        self.phone_entry.insert(0, info.get("Phone_Num", ""))
+        self.incharge_entry.delete(0, tk.END)
+        self.incharge_entry.insert(0, info.get("Incharge", ""))
+        self.contact_number_entry.delete(0, tk.END)
+        self.contact_number_entry.insert(0, info.get("Contact_Num", ""))
+        self.po_ref_entry.delete(0, tk.END)
+        self.po_ref_entry.insert(0, info.get("Customer_PO", ""))
+        self.quotation_entry.delete(0, tk.END)
+        self.quotation_entry.insert(0, info.get("Quotation", ""))
+        self.subject_entry.delete(0, tk.END)
+        self.subject_entry.insert(0, info.get("Subject", ""))
+        self.dispatch_date_var.set(info.get("Date", datetime.now().strftime("%d-%m-%y")))
+        self.dispatch_no_var.set(info.get("Dispatch_Note_No", self.generate_dispatch_note_number()))
+
+        self.item_tree.delete(*self.item_tree.get_children())
+        for row in file_data.get("items", []):
+            self.item_tree.insert("", "end", values=row)
+        
+        print("DEBUG: autofilling GUI with info:", file_data.get("info"))
+        print("DEBUG: items:", file_data.get("items"))
+
+        messagebox.showinfo("Success", "Word document uploaded and GUI autofilled successfully.") 
 
 
 # Test the module independently

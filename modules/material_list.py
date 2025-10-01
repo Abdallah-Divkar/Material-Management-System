@@ -57,6 +57,7 @@ class MaterialListGenerator(BaseGenerator):
         self.create_title_section(left_frame_callback=self.create_material_info_inline)
         #self.load_material_info()
 
+        self.generate_material_list_number()
 
         # Create custom widgets
         self.create_custom_widgets()
@@ -170,15 +171,21 @@ class MaterialListGenerator(BaseGenerator):
         # Bind selection to load first dispatch note for this client
         self.client_dropdown.bind("<<ComboboxSelected>>", self.on_client_selected)
         
+        self.create_info_field(info_frame, "Doc:", 0, 2)
+        self.material_list_no_var = tk.StringVar()
+        self.material_list_no_entry = self.create_info_entry(
+            info_frame, "", 0, 3, textvariable=self.material_list_no_var, width=18
+        )
         self.create_info_field(info_frame, "Project:", 1, 0)
         self.project_entry = self.create_info_entry(info_frame, "", 1, 1)
         self.create_info_field(info_frame, "Work Order No:", 1, 2)
         self.po_ref_entry = self.create_info_entry(info_frame, "", 1, 3)
         self.create_info_field(info_frame, "Client:", 2, 0)
         self.incharge_entry = self.create_info_entry(info_frame, "", 2, 1)
-        self.create_info_field(info_frame, "Delivery Date:", 2, 2)
+        self.create_info_field(info_frame, "Date:", 2, 2)
         self.delivery_date = self.create_info_entry(info_frame, self.delivery_date_var.get(), 2, 3, textvariable=self.delivery_date_var)
-
+        self.create_info_field(info_frame, "Subject:", 3, 0)
+        self.subject_entry = self.create_info_entry(info_frame, "", 3, 1, width=40)
         return info_frame
 
     def create_info_field(self, parent, text, row, col, width=12):
@@ -236,11 +243,11 @@ class MaterialListGenerator(BaseGenerator):
     
     def create_custom_widgets(self):
         self.get_treeview_columns()
-        save_btn = tk.Button(self.btn_frame, text="Save Material Release Form", command=self.save_material_list)
+        '''save_btn = tk.Button(self.btn_frame, text="Save Material Release Form", command=self.save_material_list)
         save_btn.grid(row=0, column=5, sticky="w", padx=10, pady=5)
 
         load_btn = tk.Button(self.btn_frame, text="Load Material Release Form", command=self.load_all_material_lists)
-        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)
+        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)'''
 
     def save_material_list(self, new_entry=None):
         """
@@ -248,11 +255,12 @@ class MaterialListGenerator(BaseGenerator):
         """
         if new_entry is None:
             new_entry = {
+                "Doc": self.doc_no_var.get().strip(),
                 "Incharge": self.incharge_entry.get().strip(),
                 "Customer PO Ref": self.po_ref_entry.get().strip(),
                 "Project": self.project_entry.get().strip(),
                 "Delivery Note Date": self.delivery_date.get().strip(),
-                "Notes": self.notes.get().strip()
+                "Subject": self.subject_entry.get().strip()
             }
         filename = self.MATERIAL_INFO_FILE
         # Load existing data first
@@ -299,13 +307,20 @@ class MaterialListGenerator(BaseGenerator):
             print(f"[DEBUG] Example entry - Customer: {sample}")
         return data
 
-    def get_unique_customers(self):
+    def get_unique_customers(self, use_cache=False):
         """
         Return a list of unique customers from saved material lists.
         """
-        notes = self.load_all_material_lists()
-        customers = list({note.get('Customer', '') for note in notes})
-        print(f"[DEBUG] Unique customers: {customers}")
+        if use_cache:
+            cache_file = "./backup/client_info_cache.json"
+            data = load_from_json(cache_file)
+            if not data:
+                return []
+            customers = list({d.get('Customer', '') for d in data})
+        else:
+            notes = self.load_all_material_lists()
+            customers = list({note.get('Customer', '') for note in notes})
+            print(f"[DEBUG] Unique customers: {customers}")
         return customers
 
     def get_notes_by_customer(self, customer):
@@ -318,40 +333,46 @@ class MaterialListGenerator(BaseGenerator):
         return filtered
 
     def load_material_list_to_gui(self, note):
-        '''
-        self.address_entry.delete(0, tk.END)
-        self.address_entry.insert(0, note.get("Address", ""))
-
-        self.phone_entry.delete(0, tk.END)
-        self.phone_entry.insert(0, note.get("Phone", ""))
-
-        self.fax_entry.delete(0, tk.END)
-        self.fax_entry.insert(0, note.get("Fax", ""))'''
-
-        self.incharge_entry.delete(0, tk.END)
-        self.incharge_entry.insert(0, note.get("Incharge", ""))
-
-        '''self.contact_number_entry.delete(0, tk.END)
-        self.contact_number_entry.insert(0, note.get("Contact Number", ""))'''
-
-        self.po_ref_entry.delete(0, tk.END)
-        self.po_ref_entry.insert(0, note.get("Customer PO Ref", ""))
-
-        '''self.quotation_entry.delete(0, tk.END)
-        self.quotation_entry.insert(0, note.get("Quotation", ""))'''
-
-        self.project_entry.delete(0, tk.END)
-        self.project_entry.insert(0, note.get("Project", ""))
-
-        self.delivery_date_var.set(note.get("Delivery Note Date", datetime.now().strftime("%d-%m-%y")))
-        self.notes.set(note.get("Notes", ""))
+        mapping = {
+            "Project_Name": self.project_entry,
+            "Attn.": self.incharge_entry,
+            "Customer_PO": self.po_ref_entry,
+            "Subject": self.subject_entry,
+            "Date": self.delivery_date_var,
+            "Doc": self.delivery_no_var
+        }
+        for key, widget in mapping.items():
+            value = note.get(key, "")
+            if isinstance(widget, tk.Entry):
+                widget.delete(0, tk.END)
+                widget.insert(0, value)
+            elif isinstance(widget, tk.StringVar):
+                widget.set(value)
 
     def on_client_selected(self, event):
         selected_client = self.client_var.get()
-        notes = self.get_notes_by_customer(selected_client)
-        if notes:
-            # Load the first note for this client into the GUI
-            self.load_material_list_to_gui(notes[0])
+        data = load_from_json("./backup/client_info_cache.json")
+        project_info = next((d for d in data if d.get('Attn.', '') == selected_client), None)
+        if project_info:
+            self.doc_no_var.set(project_info.get("Doc", ""))
+            self.project_entry.delete(0, tk.END)
+            self.project_entry.insert(0, project_info.get("Project", ""))
+            self.address_entry.delete(0, tk.END)
+            self.address_entry.insert(0, project_info.get("Dispatch Address", ""))
+            self.phone_entry.delete(0, tk.END)
+            self.phone_entry.insert(0, project_info.get("Phone", ""))
+            self.incharge_entry.delete(0, tk.END)
+            self.incharge_entry.insert(0, project_info.get("Attn.", ""))
+            self.contact_number_entry.delete(0, tk.END)
+            self.contact_number_entry.insert(0, project_info.get("Contact Number", ""))
+            self.po_ref_entry.delete(0, tk.END)
+            self.po_ref_entry.insert(0, project_info.get("Customer PO Ref", ""))
+            self.quotation_entry.delete(0, tk.END)
+            self.quotation_entry.insert(0, project_info.get("Quotation", ""))
+            self.subject_entry.delete(0, tk.END)
+            self.subject_entry.insert(0, project_info.get("Subject", ""))
+        else:
+            self.generate_material_list_number()
 
     def append_material_list_excel(self, new_entry):
         """
@@ -374,7 +395,6 @@ class MaterialListGenerator(BaseGenerator):
         except Exception as e:
             print(f"[DEBUG] Failed to append Excel backup: {e}")
 
-
     def get_treeview_columns(self):
         """Return columns specific to material lists"""
         return ("Part Number", "Description", "Supplier", "Qty", "Unit Price", "Total Price", "Weight")
@@ -396,6 +416,27 @@ class MaterialListGenerator(BaseGenerator):
             format_currency(total_price, self.currency_unit.get()),
             format_weight(weight),
         )
+
+    def generate_material_list_number(self):
+            """
+            Generate a new material list number in the format ML{seq}-{MM}-{YY}.
+            Sequence resets every year.
+            """
+            all_lists = self.load_all_material_lists()
+            if not all_lists:
+                seq = 1
+            else:
+                last_ml = all_lists[-1].get("Material List No.", "")
+                print(f"[DEBUG] Last material list number: {last_ml}")
+                try:
+                    seq = int(last_ml[2:5]) + 1
+                except:
+                    seq = len(all_lists) + 1
+            now = datetime.now()
+            ml_number = f"MRF{seq:03d}-{now.strftime('%m-%y')}"
+            self.material_list_no_var.set(ml_number)
+            return ml_number
+
 
     def get_export_data(self):
         """Return data formatted for export with column mapping by name"""
@@ -469,6 +510,9 @@ class MaterialListGenerator(BaseGenerator):
             doc.save(save_path)
             save_to_json(export_data)
             messagebox.showinfo("Success", f"Material list exported successfully:\n{save_path}")
+
+            self.save_material_list()
+            print(f"[DEBUG] Material list info saved")
 
         except Exception as e:
             messagebox.showerror("Export Failed", f"Failed to export material list:\n{str(e)}")
@@ -592,6 +636,8 @@ class MaterialListGenerator(BaseGenerator):
                 os.system(f"lp '{pdf_path}'")
 
             messagebox.showinfo("Success", f"Material list sent to printer.")
+            self.save_material_list()
+            print(f"[DEBUG] Material list info saved from PDF.")
 
         except Exception as e:
             messagebox.showerror("Print Failed", f"Failed to print material list:\n{e}")

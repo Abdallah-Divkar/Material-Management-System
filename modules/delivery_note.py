@@ -24,7 +24,7 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx2pdf import convert
-from common.utils import replace_placeholder_in_paragraph, replace_placeholders_in_doc, replace_placeholders_in_doc, save_to_json, load_from_json, parse_float_from_string
+from common.utils import parse_price_from_display, parse_qty_from_display, parse_weight_from_display, replace_placeholder_in_paragraph, replace_placeholders_in_doc, replace_placeholders_in_doc, save_to_json, load_from_json, parse_float_from_string
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -73,12 +73,11 @@ class DeliveryNoteGenerator(BaseGenerator):
         """Create delivery note specific widgets."""
         # This method ensures treeview columns are properly configured
         self.get_treeview_columns()
-        save_btn = tk.Button(self.btn_frame, text="Save Delivery Info", command=self.save_delivery_note)
+        '''save_btn = tk.Button(self.btn_frame, text="Save Delivery Info", command=self.save_delivery_note)
         save_btn.grid(row=0, column=5, sticky="w", padx=10, pady=5)
 
         load_btn = tk.Button(self.btn_frame, text="Load Delivery Info", command=self.load_all_delivery_notes)
-        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)
-
+        load_btn.grid(row=0, column=6, sticky="w", padx=10, pady=5)'''
 
     def create_title_section(self, left_frame_callback=None):
         """
@@ -277,11 +276,15 @@ class DeliveryNoteGenerator(BaseGenerator):
 
         # Update client/project cache
         self.update_client_info_cache(
+            delivery_no=new_entry["Delivery_Note_No"],
             customer=new_entry["Customer"],
             project=new_entry["Project"],
             address=new_entry.get("Address", ""),
             phone=new_entry.get("Phone", ""),
-            incharge=new_entry.get("Incharge", "")
+            incharge=new_entry.get("Incharge", ""),
+            contact_number=new_entry.get("Contact Number", ""),
+            po_ref=new_entry.get("Customer PO Ref", ""),
+            quotation=new_entry.get("Quotation", "")
         )
 
     def load_all_delivery_notes(self):
@@ -547,7 +550,6 @@ class DeliveryNoteGenerator(BaseGenerator):
 
             # Parse numeric fields using utility functions
             try:
-                from common.utils import parse_qty_from_display, parse_price_from_display, parse_weight_from_display
 
                 qty = parse_qty_from_display(vals[2])
                 price = parse_price_from_display(vals[4])
@@ -644,6 +646,9 @@ class DeliveryNoteGenerator(BaseGenerator):
             save_to_json(export_data)
             messagebox.showinfo("Success", f"Delivery note exported successfully:\n{save_path}")
 
+            self.save_delivery_note()
+            print(f"[DEBUG] Delivery info saved to {self.DELIVERY_INFO_FILE}")
+
         except Exception as e:
             messagebox.showerror("Export Failed", f"Failed to export delivery note:\n{str(e)}")
     
@@ -659,7 +664,8 @@ class DeliveryNoteGenerator(BaseGenerator):
                 return
 
             doc_number  = self.delivery_no_var.get().strip() or "DN"
-            pdf_filename = f"{doc_number}.pdf"
+            client_name = self.customer_entry.get().strip() or "Client"
+            pdf_filename = f"{doc_number}-{client_name}.pdf"
             temp_dir = tempfile.gettempdir()
             pdf_path = os.path.join(temp_dir, pdf_filename)
 
@@ -705,6 +711,8 @@ class DeliveryNoteGenerator(BaseGenerator):
 
             messagebox.showinfo("Success", "Delivery note sent to printer.")
 
+            self.save_delivery_note()
+            print("[DEBUG] Delivery info saved automatically on print")
         except Exception as e:
             messagebox.showerror("Print Failed", f"Failed to print delivery note:\n{e}")
 
